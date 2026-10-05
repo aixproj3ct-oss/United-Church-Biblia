@@ -162,3 +162,30 @@ test("avisoYouVersion: solo booleano true; se conserva en guardarConfig e import
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: { avisoYouVersion: true } }));
   assert.equal(a.config().avisoYouVersion, true);
 });
+
+test("estado ilegible o inválido se copia crudo antes de sobrescribirse", () => {
+  const reloj = () => new Date("2026-10-05T12:00:00Z");
+  const t = reloj().getTime();
+  for (const [raw, nombre] of [["{no es json", "corrupto"], [JSON.stringify({ version: 2, domingos: [], favoritos: [], historial: [], config: {} }), "versión 2"]]) {
+    const m = memoria();
+    m.setItem("uc-biblia-v1", raw);
+    const a = crearAlmacen(m, reloj);
+    assert.equal(m.getItem(`uc-biblia-v1-crudo-${t}`), raw, nombre);
+    a.agregarFavorito("Bodas", cita("1CO.13.4-7")); // el guardado sobrescribe la clave principal, el crudo sigue ahí
+    assert.equal(m.getItem(`uc-biblia-v1-crudo-${t}`), raw, nombre);
+  }
+  const limpio = memoria();
+  crearAlmacen(limpio, reloj);
+  assert.equal(limpio.getItem(`uc-biblia-v1-crudo-${t}`), null);
+});
+
+test("importar devuelve el número de elementos dañados descartados", () => {
+  const a = crearAlmacen(memoria());
+  const ok = { id: "x", serie: "S", cita: cita("JHN.3.16") };
+  const malo = { id: "y", serie: "S", cita: { codigo: "A", etiqueta: "A", url: "http://x" } };
+  const n = a.importar(JSON.stringify({ version: 1, domingos: [{ id: "d", fecha: "mala", titulo: "", citas: [] }], favoritos: [ok, malo],
+    historial: [{ cita: cita("JHN.3.16"), cuando: "2026-10-05T00:00:00Z" }, { cita: null, cuando: "x" }], config: {} }));
+  assert.equal(n, 3);
+  assert.equal(a.favoritos().length, 1);
+  assert.equal(a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: {} })), 0);
+});

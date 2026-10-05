@@ -10,7 +10,9 @@ const dec = s => JSON.parse(decodeURIComponent(s));
 const hoyISO = () => new Date().toLocaleDateString("en-CA");
 const citaDe = r => ({ codigo: r.codigoRef, etiqueta: r.etiqueta, url: r.url });
 const YOUVERSION = "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.sirma.mobile.bible.android;S.browser_fallback_url=https%3A%2F%2Fwww.bible.com%2Fes%2Fbible%2F176%2FGEN.1.TLA;end";
-let vista = "inicio", domingoSel = null, favPendiente = null;
+const VISTAS = ["inicio", "domingo", "favoritos", "historial", "config"];
+const vistaDeHash = () => { const h = location.hash.slice(1); return VISTAS.includes(h) ? h : "inicio"; };
+let vista = vistaDeHash(), domingoSel = null, favPendiente = null;
 
 const PAISAJE = `<svg viewBox="0 0 1200 220" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs>
 <linearGradient id="cielo" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#fff7e6"/><stop offset=".7" stop-color="#fde7c2"/><stop offset="1" stop-color="#f5f6fb"/></linearGradient>
@@ -34,9 +36,9 @@ const fechaLarga = iso => new Date(iso + "T12:00").toLocaleDateString("es", { we
 function aviso(msg, ms = 3500) { const a = $("#aviso"); a.textContent = msg; a.hidden = false; clearTimeout(aviso.t); aviso.t = setTimeout(() => (a.hidden = true), ms); }
 
 function abrir(cita) {
-  if (!navigator.onLine) return aviso("Sin internet: conéctate al Wi-Fi para abrir el pasaje.");
   almacen.registrarHistorial(cita);
-  if (!almacen.config().avisoYouVersion) {
+  if (!navigator.onLine) aviso("Sin internet; si descargaste la TLA en YouVersion se abrirá igual.", 6000);
+  else if (!almacen.config().avisoYouVersion) {
     almacen.guardarConfig({ avisoYouVersion: true });
     aviso("Si el pasaje se abre en el navegador en vez de la app Biblia: Ajustes › Aplicaciones › Biblia › Abrir enlaces compatibles.", 8000);
   }
@@ -50,8 +52,8 @@ function itemCita(c, i) {
 
 function itemHistorial(h) {
   const s = serieDe(h.cita.codigo);
-  return `<li><button class="fila" data-cita="${enc(h.cita)}"><span class="ic-serie" style="--h:${tono(s || h.cita.etiqueta)}">${esc((s || h.cita.etiqueta)[0])}</span>
-    <span><b>${esc(h.cita.etiqueta)}</b> <small>· ${hace(h.cuando)}</small>${s ? `<span class="tag">${esc(s)}</span>` : ""}</span><span class="chev">›</span></button>
+  return `<li><button class="fila" data-cita="${enc(h.cita)}"><span class="ic-serie" style="--h:${tono(s || h.cita.etiqueta)}">${esc([...(s || h.cita.etiqueta)][0])}</span>
+    <span class="txt"><b>${esc(h.cita.etiqueta)}</b> <small>· ${hace(h.cuando)}</small>${s ? `<span class="tag">${esc(s)}</span>` : ""}</span><span class="chev">›</span></button>
     <button class="estrella" data-fav="${enc(h.cita)}" aria-label="Guardar en favoritos">☆</button></li>`;
 }
 
@@ -62,14 +64,22 @@ function tarjetaDomingo(d) {
     <ol class="citas">${d.citas.map(itemCita).join("")}</ol>`;
 }
 
+function recordatorioRespaldo() {
+  const r = almacen.config().ultimoRespaldo;
+  const viejo = !r || !(Date.now() - Date.parse(r) <= 30 * 86400000);
+  if (!viejo || !(almacen.domingos().length || almacen.favoritos().length)) return "";
+  return `<p class="recordatorio">Haz una copia de respaldo <button class="link" data-ir="config">Ir a Configuración</button></p>`;
+}
+
 function vistaInicio() {
   const h = almacen.historial().slice(0, 5);
   return `<header class="hero">${PAISAJE}<div><h1>${saludo()}, ${esc(almacen.config().nombre)}</h1><p>Que la Palabra de Dios te guíe hoy.</p></div>
       <div class="fecha-hoy">☀ ${esc(new Date().toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" }))}</div></header>
     <section class="buscador"><form id="f-buscar" autocomplete="off"><span class="lupa" aria-hidden="true">⌕</span>
-      <input id="q" type="search" enterkeyhint="go" placeholder="Escribe una cita: jn 3 16 · sal 23 · 1 co 13 del 4 al 7" aria-label="Cita bíblica">
+      <input id="q" type="search" enterkeyhint="go" placeholder="Ej.: jn 3 16 · 1 co 13 del 4 al 7" aria-label="Cita bíblica">
       <button type="submit" class="btn-primario" id="b-abrir" disabled>Abrir pasaje →</button></form>
       <div id="pista" class="pista"></div></section>
+    ${recordatorioRespaldo()}
     <div class="grid-inicio"><section class="card domingo">${tarjetaDomingo(almacen.domingoActual(hoyISO()))}</section>
       <section class="card"><div class="card-cab"><h2>🕘 Lecturas recientes</h2><button class="link" data-ir="historial">Ver todo</button></div>
       ${h.length ? `<ul class="lista">${h.map(itemHistorial).join("")}</ul>` : `<p class="vacio">Aquí aparecerán los pasajes que abras.</p>`}</section></div>`;
@@ -104,7 +114,7 @@ function vistaFavoritos() {
   if (!fs.length) return `<h1 class="titulo-vista">Favoritos y series</h1><p class="vacio">Toca ☆ en cualquier pasaje para guardarlo en una serie.</p>`;
   return `<h1 class="titulo-vista">Favoritos y series</h1>` + almacen.series().map(s => `<section class="card serie-bloque">
       <div class="card-cab"><h2><span class="tag">${esc(s)}</span></h2></div><ul class="lista">
-      ${fs.filter(f => f.serie === s).sort((x, y) => ordenBiblico(x.cita.codigo) - ordenBiblico(y.cita.codigo)).map(f => `<li><button class="fila" data-cita="${enc(f.cita)}"><span class="ic-serie" style="--h:${tono(s)}">${esc(s[0])}</span><b>${esc(f.cita.etiqueta)}</b><span class="chev">›</span></button>
+      ${fs.filter(f => f.serie === s).sort((x, y) => ordenBiblico(x.cita.codigo) - ordenBiblico(y.cita.codigo)).map(f => `<li><button class="fila" data-cita="${enc(f.cita)}"><span class="ic-serie" style="--h:${tono(s)}">${esc([...s][0])}</span><b>${esc(f.cita.etiqueta)}</b><span class="chev">›</span></button>
         <button class="estrella" data-quitar="${esc(f.id)}" aria-label="Quitar de favoritos">✕</button></li>`).join("")}</ul></section>`).join("");
 }
 
@@ -132,7 +142,11 @@ function pintar() {
   if (vista === "domingo") previstaDomingo();
 }
 
-function ir(v) { vista = v; pintar(); $("#vista").scrollTop = 0; }
+function ir(v) {
+  if (v !== vista) history.pushState({ vista: v }, "", "#" + v);
+  vista = v; pintar(); $("#vista").scrollTop = 0;
+}
+window.addEventListener("popstate", ev => { vista = VISTAS.includes(ev.state?.vista) ? ev.state.vista : vistaDeHash(); pintar(); $("#vista").scrollTop = 0; });
 
 function pista() {
   const q = $("#q").value, p = $("#pista"), b = $("#b-abrir");
@@ -164,7 +178,7 @@ document.addEventListener("click", ev => {
   const t = ev.target.closest("button,[data-ir]");
   if (!t) return;
   if (t.dataset.ir) return ir(t.dataset.ir);
-  if (t.hasAttribute("data-abrir-biblia")) { if (!navigator.onLine) return aviso("Sin internet: conéctate al Wi-Fi."); location.href = YOUVERSION; return; }
+  if (t.hasAttribute("data-abrir-biblia")) { location.href = YOUVERSION; return; }
   if (t.dataset.cita) return abrir(dec(t.dataset.cita));
   if (t.dataset.fav) return pedirSerie(dec(t.dataset.fav));
   if (t.dataset.quitar) { almacen.quitarFavorito(t.dataset.quitar); return pintar(); }
@@ -173,9 +187,10 @@ document.addEventListener("click", ev => {
   if (t.dataset.serie) { document.querySelectorAll("#fav-series .chip").forEach(c => c.classList.toggle("sel", c === t)); $("#fav-nueva").value = t.dataset.serie; }
   if (t.id === "d-borrar" && confirm("¿Borrar este domingo?")) { almacen.borrarDomingo(domingoSel); domingoSel = null; pintar(); aviso("Domingo borrado"); }
   if (t.id === "c-exportar") {
+    const nombre = `united-church-respaldo-${hoyISO()}.json`;
     const blob = new Blob([almacen.exportar()], { type: "application/json" });
-    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `united-church-respaldo-${hoyISO()}.json` });
-    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); pintar(); aviso("Copia descargada");
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: nombre });
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); pintar(); aviso(`Copia guardada en Descargas: ${nombre}`, 7000);
   }
 });
 
@@ -207,12 +222,20 @@ document.addEventListener("submit", ev => {
 document.addEventListener("change", async ev => {
   if (ev.target.id !== "c-importar" || !ev.target.files[0]) return;
   const inp = ev.target;
-  try { almacen.importar(await inp.files[0].text()); pintar(); aviso("Copia restaurada"); }
+  try {
+    const texto = await inp.files[0].text();
+    if (confirm("Esto reemplaza todos los datos actuales por los de la copia. ¿Continuar?")) {
+      const n = almacen.importar(texto);
+      pintar(); aviso(n ? `Copia restaurada (${n} elementos dañados se omitieron)` : "Copia restaurada");
+    }
+  }
   catch { aviso("Ese archivo no es una copia válida de United Church"); }
   inp.value = "";
 });
 
 $("#dlg-fav").addEventListener("close", () => { favPendiente = null; });
 window.addEventListener("offline", () => aviso("Sin internet: los pasajes se abrirán cuando vuelva el Wi-Fi."));
+navigator.storage?.persist?.().catch?.(() => {});
+history.replaceState({ vista }, "", "#" + vista);
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 pintar();

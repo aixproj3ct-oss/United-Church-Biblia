@@ -53,7 +53,7 @@ const ERR = [
   ["", "Escribe una cita"], ["jn", "capítulo"], ["juan 30", "Juan tiene 21 capítulos"],
   ["sal 151", "Salmos tiene 150 capítulos"], ["jn 0", "Juan tiene 21 capítulos"], ["jn 3 0", "versículo"],
   ["xyz 1 1", "No reconocí"], ["jaun 3 16", "No reconocí"], ["jn 3 16 18", "No entendí los números"],
-  ["jn 3 abc", "No entendí los números"], ["corintios 13", "¿Cuál?"], ["pedro 1 1", "¿Cuál?"],
+  ["jn 3 abc", "No entendí los números"], ["joel 4", "Joel tiene 3 capítulos"], ["corintios 13", "¿Cuál?"], ["pedro 1 1", "¿Cuál?"],
 ];
 for (const [entrada, fragmento] of ERR) {
   test(`rechaza "${entrada}"`, () => {

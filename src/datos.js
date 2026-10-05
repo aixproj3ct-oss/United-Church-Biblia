@@ -30,10 +30,16 @@ const validoFavorito = f => f && typeof f.id === "string" && typeof f.serie === 
 const validoHistorial = h => h && validoCita(h.cita) && typeof h.cuando === "string";
 
 export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () => new Date()) {
-  let e;
-  try { e = JSON.parse(storage.getItem(CLAVE)); } catch { e = null; }
-  if (!valido(e)) e = vacio();
-  else {
+  let e, crudo = null;
+  try { crudo = storage.getItem(CLAVE); } catch { /* sin acceso */ }
+  try { e = JSON.parse(crudo); } catch { e = null; }
+  if (!valido(e)) {
+    // Si había algo guardado que no se pudo leer, se conserva una copia cruda antes de que cualquier guardado lo sobrescriba.
+    if (crudo !== null && crudo !== undefined) {
+      try { storage.setItem(`${CLAVE}-crudo-${reloj().getTime()}`, String(crudo)); } catch { /* sin espacio */ }
+    }
+    e = vacio();
+  } else {
     e.domingos = (e.domingos || []).filter(validoDomingo);
     e.favoritos = (e.favoritos || []).filter(validoFavorito);
     e.historial = (e.historial || []).filter(validoHistorial);
@@ -88,12 +94,16 @@ export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () =>
       try { n = JSON.parse(texto); } catch { throw new Error("Archivo no válido"); }
       if (!valido(n)) throw new Error("Archivo no válido");
       delete n.exportado;
-      n.domingos = (n.domingos || []).filter(validoDomingo);
-      n.favoritos = (n.favoritos || []).filter(validoFavorito);
-      n.historial = (n.historial || []).filter(validoHistorial).slice(0, MAX_HISTORIAL);
+      const antes = n.domingos.length + n.favoritos.length + n.historial.length;
+      n.domingos = n.domingos.filter(validoDomingo);
+      n.favoritos = n.favoritos.filter(validoFavorito);
+      n.historial = n.historial.filter(validoHistorial);
+      const descartados = antes - (n.domingos.length + n.favoritos.length + n.historial.length);
+      n.historial = n.historial.slice(0, MAX_HISTORIAL);
       n.config = sanearConfig(n.config);
       e = n;
       guardar();
+      return descartados;
     },
   };
 }

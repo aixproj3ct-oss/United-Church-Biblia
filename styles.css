@@ -1,4 +1,4 @@
-:root{--azul:#2563eb;--azul-o:#0b1a4a;--azul-m:#1e3a8a;--tinta:#0f172a;--sub:#64748b;--fondo:#f5f6fb;--card:#fff;--linea:#e6e9f2;--dorado:#c9a227;--ok:#16a34a;--mal:#dc2626;--r:20px;--base:18px}
+:root{--azul:#2563eb;--azul-o:#0b1a4a;--azul-m:#1e3a8a;--tinta:#0f172a;--sub:#566377;--fondo:#f5f6fb;--card:#fff;--linea:#e6e9f2;--dorado:#8a6d00;--ok:#15803d;--mal:#b91c1c;--r:20px;--base:18px}
 html[data-letra="normal"]{--base:17px}html[data-letra="grande"]{--base:19px}html[data-letra="muy-grande"]{--base:22px}
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -21,10 +21,11 @@ button{font:inherit;cursor:pointer}
 .hero>div{position:relative;z-index:1}
 .hero h1{margin:0;font-size:2.1em;font-weight:750;letter-spacing:-.5px}
 .hero p{margin:4px 0 0;color:#334155}
-.fecha-hoy{color:#334155;font-size:1.05em;text-transform:capitalize}
+.fecha-hoy{color:#334155;font-size:1.05em}
 .buscador{position:relative;z-index:1;margin-top:-10px}
 #f-buscar{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:22px;padding:8px 8px 8px 22px;box-shadow:0 14px 34px rgba(15,23,42,.12);border:1px solid var(--linea)}
 .lupa{font-size:1.4em;color:var(--sub)}
+#f-buscar:focus-within{outline:3px solid var(--azul);outline-offset:2px}
 #q{flex:1;min-width:0;border:0;outline:0;font:inherit;font-size:1.35em;background:transparent;color:var(--tinta)}
 .btn-primario{border:0;border-radius:16px;background:var(--azul);color:#fff;font-weight:650;padding:0 26px;min-height:56px;font-size:1.05em;box-shadow:0 8px 20px rgba(37,99,235,.35)}
 .btn-primario:disabled{opacity:.45;box-shadow:none}
@@ -37,7 +38,7 @@ button{font:inherit;cursor:pointer}
 .grid-inicio{display:grid;grid-template-columns:1.25fr 1fr;gap:22px;margin-top:18px}
 .card{background:var(--card);border-radius:var(--r);border:1px solid var(--linea);padding:22px 24px;box-shadow:0 6px 22px rgba(15,23,42,.05)}
 .card h2{margin:0;font-size:.8em;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);font-weight:650}
-.card-cab{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.card-cab{flex-wrap:wrap;gap:6px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .card-cab h2{font-size:1.05em;letter-spacing:0;text-transform:none;color:var(--tinta)}
 .link{border:0;background:#eef2ff;color:var(--azul);border-radius:10px;padding:6px 14px;min-height:48px}
 .domingo{background:linear-gradient(120deg,#fff 55%,#fdf6e7 100%)}
@@ -54,6 +55,8 @@ button{font:inherit;cursor:pointer}
 .ic-serie{flex:none;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;color:#fff;font-weight:700;background:hsl(var(--h,220) 70% 50%)}
 .tag{display:inline-block;margin-left:6px;padding:2px 10px;border-radius:8px;background:#fef3c7;color:#92400e;font-size:.8em}
 .fila small{color:var(--sub)}
+.fila .txt{min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.recordatorio{margin:14px 8px 0;color:var(--sub);display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:.92em}
 .vacio{color:var(--sub);padding:12px 0}
 .titulo-vista{margin:28px 0 18px;font-size:1.8em}
 .form{display:grid;gap:14px}
@@ -76,3 +79,8 @@ dialog h3{margin:0 0 4px}dialog .sub{margin:0 0 6px;color:var(--sub)}
 dialog input{width:100%;font:inherit;border:1px solid var(--linea);border-radius:14px;padding:12px 14px;min-height:52px;margin:6px 0 18px}
 .aviso{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--tinta);color:#fff;padding:14px 22px;border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.3);z-index:10;max-width:90vw}
 @media (max-width:900px){body{grid-template-columns:1fr;overflow:auto}.lateral{flex-direction:row;flex-wrap:wrap;align-items:center;padding:14px}.menu{flex-direction:row;flex-wrap:wrap}.atajo{display:none}.grid-inicio{grid-template-columns:1fr}.principal{overflow:visible}}
+html[data-letra="muy-grande"] .grid-inicio{grid-template-columns:1fr}
+html[data-letra="muy-grande"] .hero{padding:18px 32px 20px;min-height:0;flex-wrap:wrap;gap:6px}
+html[data-letra="muy-grande"] .hero h1{font-size:1.6em}
+html[data-letra="muy-grande"] #q{font-size:1.1em}
+@media (max-width:1100px){html:not([data-letra="normal"]) .grid-inicio{grid-template-columns:1fr}html:not([data-letra="normal"]) .hero{padding:20px 32px;min-height:0;flex-wrap:wrap;gap:6px}html:not([data-letra="normal"]) #q{font-size:1.15em}}
