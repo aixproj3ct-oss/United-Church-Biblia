@@ -9,7 +9,7 @@ test("66 libros con códigos únicos", () => {
 
 test("capítulos: total protestante 1189 (Joel y Malaquías con margen de 1)", () => {
   const total = LIBROS.reduce((s, l) => s + l[2], 0);
-  assert.equal(total, 1189 + 2); // JOL 4 y MAL 4 permiten la numeración de algunas Biblias en español
+  assert.equal(total, 1189 + 1); // Joel con 4 capítulos para aceptar la numeración de algunas Biblias en español
   assert.equal(LIBROS.find(l => l[0] === "PSA")[2], 150);
   assert.equal(LIBROS.find(l => l[0] === "JHN")[2], 21);
 });

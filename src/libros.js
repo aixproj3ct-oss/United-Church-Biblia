@@ -1,7 +1,7 @@
 // Los 66 libros de la Biblia: código USFM (el que usa bible.com), nombre para mostrar, cantidad de capítulos
 // y abreviaturas en español (normalizadas: minúsculas, sin acentos ni espacios). Solo datos públicos:
 // este proyecto nunca guarda texto bíblico (la TLA tiene derechos de las Sociedades Bíblicas Unidas).
-// Joel y Malaquías llevan 4 capítulos para aceptar la numeración de algunas Biblias en español.
+// Joel lleva 4 capítulos para aceptar la numeración de algunas Biblias en español.
 export const LIBROS = [
   ["GEN", "Génesis", 50, ["gn", "gen", "gene", "genesis"]],
   ["EXO", "Éxodo", 40, ["ex", "exo", "exod", "exodo"]],
@@ -41,7 +41,7 @@ export const LIBROS = [
   ["ZEP", "Sofonías", 3, ["sof", "sofonias"]],
   ["HAG", "Hageo", 2, ["hag", "hageo"]],
   ["ZEC", "Zacarías", 14, ["zac", "zacarias"]],
-  ["MAL", "Malaquías", 5, ["mal", "malaquias"]],
+  ["MAL", "Malaquías", 4, ["mal", "malaquias"]],
   ["MAT", "Mateo", 28, ["mt", "mat", "mateo"]],
   ["MRK", "Marcos", 16, ["mr", "mc", "mar", "marcos"]],
   ["LUK", "Lucas", 24, ["lc", "luc", "lucas"]],
