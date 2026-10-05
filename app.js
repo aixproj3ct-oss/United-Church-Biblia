@@ -130,8 +130,10 @@ function vistaConfig() {
     <div class="acciones"><button type="submit" class="btn-primario">Guardar</button></div></form>
     <section class="card form" style="margin-top:22px"><h2>Copia de respaldo</h2>
       <p class="meta">Último respaldo: ${c.ultimoRespaldo ? esc(new Date(c.ultimoRespaldo).toLocaleString("es")) : "nunca"}</p>
-      <div class="acciones" style="justify-content:flex-start"><button type="button" class="btn-primario" id="c-exportar">Exportar copia</button>
-      <label class="btn-sec" style="display:inline-grid;place-items:center">Importar copia<input type="file" id="c-importar" accept="application/json,.json" hidden></label></div></section>`;
+      <div class="acciones" style="justify-content:flex-start"><button type="button" class="btn-primario" id="c-compartir">Compartir copia</button>
+      <button type="button" class="btn-sec" id="c-exportar">Exportar copia</button>
+      <label class="btn-sec" style="display:inline-grid;place-items:center">Importar copia<input type="file" id="c-importar" accept="application/json,.json,text/plain,.txt" hidden></label></div>
+      <p class="meta">Guarda la copia fuera de la tablet (WhatsApp, Drive o correo). Para recuperarla: Importar copia.</p></section>`;
 }
 
 function pintar() {
@@ -173,7 +175,14 @@ function pedirSerie(cita) {
   $("#dlg-fav").showModal();
 }
 
-document.addEventListener("click", ev => {
+const nombreCopia = ext => `united-church-respaldo-${hoyISO()}.${ext}`;
+function descargarCopia(texto, msg) {
+  const blob = new Blob([texto], { type: "application/json" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: nombreCopia("json") });
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); pintar(); aviso(msg, 7000);
+}
+
+document.addEventListener("click", async ev => {
   const t = ev.target.closest("button,[data-ir]");
   if (!t) return;
   if (t.dataset.ir) return ir(t.dataset.ir);
@@ -192,11 +201,17 @@ document.addEventListener("click", ev => {
   if (t.dataset.domingo !== undefined) { domingoSel = t.dataset.domingo || null; return pintar(); }
   if (t.dataset.serie) { document.querySelectorAll("#fav-series .chip").forEach(c => c.classList.toggle("sel", c === t)); $("#fav-nueva").value = t.dataset.serie; }
   if (t.id === "d-borrar" && confirm("¿Borrar este domingo?")) { almacen.borrarDomingo(domingoSel); domingoSel = null; pintar(); aviso("Domingo borrado"); }
-  if (t.id === "c-exportar") {
-    const nombre = `united-church-respaldo-${hoyISO()}.json`;
-    const blob = new Blob([almacen.exportar()], { type: "application/json" });
-    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: nombre });
-    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); pintar(); aviso(`Copia guardada en Descargas: ${nombre}`, 7000);
+  if (t.id === "c-exportar") descargarCopia(almacen.exportar(), `Copia guardada en Descargas: ${nombreCopia("json")}`);
+  if (t.id === "c-compartir") {
+    const texto = almacen.exportar();
+    const file = new File([texto], nombreCopia("txt"), { type: "text/plain" });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "Copia de United Church", text: "Copia de respaldo de United Church (guárdala en Drive, WhatsApp o correo)." });
+        pintar(); return aviso("Copia compartida");
+      } catch (e) { if (e?.name === "AbortError") return pintar(); }
+    }
+    descargarCopia(texto, "Este dispositivo no permite compartir archivos; la copia se guardó en Descargas.");
   }
 });
 
