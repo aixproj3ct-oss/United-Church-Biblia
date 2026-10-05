@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1a4a">
+  <title>United Church</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icono-192.png">
+  <link rel="apple-touch-icon" href="assets/icono-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="lateral">
+    <div class="marca">
+      <img src="assets/icono-192.png" alt="" width="56" height="56">
+      <div><b>United Church</b><small>International Ministries</small></div>
+    </div>
+    <nav class="menu">
+      <button data-ir="inicio"><span class="ic">⌂</span>Inicio</button>
+      <button data-ir="domingo"><span class="ic">📖</span>Pasajes del domingo</button>
+      <button data-ir="favoritos"><span class="ic">☆</span>Favoritos y series</button>
+      <button data-ir="historial"><span class="ic">🕘</span>Historial</button>
+      <button data-abrir-biblia><span class="ic">✝</span>Abrir Biblia</button>
+      <button data-ir="config"><span class="ic">⚙</span>Configuración</button>
+    </nav>
+    <div class="atajo"><span>✦ ATAJO RÁPIDO</span>Escribe como quieras: “jn 3 16”, “sal 23”, “1 co 13 del 4 al 7”.</div>
+  </aside>
+  <main id="vista" class="principal"></main>
+  <dialog id="dlg-fav">
+    <form method="dialog" id="f-fav">
+      <h3>Guardar <span id="fav-etiqueta"></span></h3>
+      <p class="sub">Elige una serie o escribe una nueva</p>
+      <div id="fav-series" class="chips"></div>
+      <input id="fav-nueva" placeholder="Nueva serie (ej. Bodas)" maxlength="40">
+      <div class="acciones"><button value="cancelar" class="btn-sec">Cancelar</button><button value="ok" class="btn-primario">Guardar</button></div>
+    </form>
+  </dialog>
+  <div id="aviso" class="aviso" role="status" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
