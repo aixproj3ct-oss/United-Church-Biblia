@@ -5,6 +5,21 @@ const MAX_HISTORIAL = 30;
 const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [],
   config: { nombre: "pastor", letra: "grande", ultimoRespaldo: null } });
 
+const LETRAS = ["normal", "grande", "muy-grande"];
+const sanearConfig = c => {
+  const o = c && typeof c === "object" ? c : {};
+  return {
+    nombre: typeof o.nombre === "string" && o.nombre.trim() ? o.nombre : "pastor",
+    letra: LETRAS.includes(o.letra) ? o.letra : "grande",
+    ultimoRespaldo: typeof o.ultimoRespaldo === "string" ? o.ultimoRespaldo : null,
+  };
+};
+
+const memoriaVolatil = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
+const almacenamientoPorDefecto = () => {
+  try { return globalThis.localStorage ?? memoriaVolatil(); } catch { return memoriaVolatil(); }
+};
+
 const valido = e => e && e.version === 1 && Array.isArray(e.domingos) && Array.isArray(e.favoritos)
   && Array.isArray(e.historial) && e.config && typeof e.config === "object";
 
@@ -13,7 +28,7 @@ const validoDomingo = d => d && typeof d.id === "string" && typeof d.fecha === "
 const validoFavorito = f => f && typeof f.id === "string" && typeof f.serie === "string" && validoCita(f.cita);
 const validoHistorial = h => h && validoCita(h.cita) && typeof h.cuando === "string";
 
-export function crearAlmacen(storage = globalThis.localStorage, reloj = () => new Date()) {
+export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () => new Date()) {
   let e;
   try { e = JSON.parse(storage.getItem(CLAVE)); } catch { e = null; }
   if (!valido(e)) e = vacio();
@@ -21,6 +36,7 @@ export function crearAlmacen(storage = globalThis.localStorage, reloj = () => ne
     e.domingos = (e.domingos || []).filter(validoDomingo);
     e.favoritos = (e.favoritos || []).filter(validoFavorito);
     e.historial = (e.historial || []).filter(validoHistorial);
+    e.config = sanearConfig(e.config);
   }
 
   const guardar = () => {
@@ -60,7 +76,7 @@ export function crearAlmacen(storage = globalThis.localStorage, reloj = () => ne
       guardar();
     },
     config: () => ({ ...e.config }),
-    guardarConfig(parcial) { e.config = { ...e.config, ...parcial }; guardar(); },
+    guardarConfig(parcial) { e.config = sanearConfig({ ...e.config, ...parcial }); guardar(); },
     exportar() {
       e.config.ultimoRespaldo = reloj().toISOString();
       guardar();
@@ -74,8 +90,7 @@ export function crearAlmacen(storage = globalThis.localStorage, reloj = () => ne
       n.domingos = (n.domingos || []).filter(validoDomingo);
       n.favoritos = (n.favoritos || []).filter(validoFavorito);
       n.historial = (n.historial || []).filter(validoHistorial).slice(0, MAX_HISTORIAL);
-      n.config = { ...vacio().config, ...n.config };
-      if (!["normal", "grande", "muy-grande"].includes(n.config.letra)) n.config.letra = "grande";
+      n.config = sanearConfig(n.config);
       e = n;
       guardar();
     },

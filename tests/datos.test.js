@@ -122,3 +122,32 @@ test("agregarFavorito ignora cita sin codigo string", () => {
   a.agregarFavorito("Serie", { codigo: null, etiqueta: "test", url: "https://www.bible.com/bible/176/JHN.3.TLA" });
   assert.equal(a.favoritos().length, 0);
 });
+
+test("config se sanea al cargar: tipos inválidos y claves desconocidas", () => {
+  const m = memoria();
+  m.setItem("uc-biblia-v1", JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
+    config: { nombre: "  ", letra: "enorme", ultimoRespaldo: 5, extra: "x" } }));
+  const cfg = crearAlmacen(m).config();
+  assert.deepEqual(cfg, { nombre: "pastor", letra: "grande", ultimoRespaldo: null });
+});
+
+test("config se sanea al importar", () => {
+  const a = crearAlmacen(memoria());
+  a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
+    config: { nombre: 42, letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", otro: 1 } }));
+  assert.deepEqual(a.config(), { nombre: "pastor", letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z" });
+});
+
+test("crearAlmacen sin argumentos no lanza si localStorage falla o no existe", () => {
+  const orig = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  try {
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new Error("denegado"); } });
+    const a = crearAlmacen();
+    a.agregarFavorito("S", cita("JHN.3.16"));
+    assert.equal(a.favoritos().length, 1);
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, value: undefined });
+    assert.doesNotThrow(() => crearAlmacen());
+  } finally {
+    if (orig) Object.defineProperty(globalThis, "localStorage", orig); else delete globalThis.localStorage;
+  }
+});
