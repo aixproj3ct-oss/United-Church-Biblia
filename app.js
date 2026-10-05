@@ -9,7 +9,6 @@ const enc = o => encodeURIComponent(JSON.stringify(o));
 const dec = s => JSON.parse(decodeURIComponent(s));
 const hoyISO = () => new Date().toLocaleDateString("en-CA");
 const citaDe = r => ({ codigo: r.codigoRef, etiqueta: r.etiqueta, url: r.url });
-const YOUVERSION = "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.sirma.mobile.bible.android;S.browser_fallback_url=https%3A%2F%2Fwww.bible.com%2Fes%2Fbible%2F176%2FGEN.1.TLA;end";
 const VISTAS = ["inicio", "domingo", "favoritos", "historial", "config"];
 const vistaDeHash = () => { const h = location.hash.slice(1); return VISTAS.includes(h) ? h : "inicio"; };
 let vista = vistaDeHash(), domingoSel = null, favPendiente = null;
@@ -178,7 +177,14 @@ document.addEventListener("click", ev => {
   const t = ev.target.closest("button,[data-ir]");
   if (!t) return;
   if (t.dataset.ir) return ir(t.dataset.ir);
-  if (t.hasAttribute("data-abrir-biblia")) { location.href = YOUVERSION; return; }
+  if (t.hasAttribute("data-abrir-biblia")) {
+    const h = almacen.historial();
+    const codigo = h.length ? h[0].cita.codigo : "GEN.1";
+    const [libro, capitulo] = codigo.split(".");
+    const url = `https://www.bible.com/bible/176/${libro}.${capitulo}.TLA`;
+    window.open(url, "_blank", "noopener");
+    return;
+  }
   if (t.dataset.cita) return abrir(dec(t.dataset.cita));
   if (t.dataset.fav) return pedirSerie(dec(t.dataset.fav));
   if (t.dataset.quitar) { almacen.quitarFavorito(t.dataset.quitar); return pintar(); }
