@@ -43,7 +43,7 @@ test("historial: el más reciente primero, sin repetir, máximo 30", () => {
 test("persiste entre instancias y config por defecto", () => {
   const s = memoria();
   const a = crearAlmacen(s);
-  assert.deepEqual(a.config(), { nombre: "pastor", letra: "grande", ultimoRespaldo: null });
+  assert.deepEqual(a.config(), { nombre: "pastor", letra: "grande", ultimoRespaldo: null, avisoYouVersion: false });
   a.guardarConfig({ nombre: "Pastor Luis" });
   assert.equal(crearAlmacen(s).config().nombre, "Pastor Luis");
 });
@@ -128,14 +128,14 @@ test("config se sanea al cargar: tipos inválidos y claves desconocidas", () => 
   m.setItem("uc-biblia-v1", JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: "  ", letra: "enorme", ultimoRespaldo: 5, extra: "x" } }));
   const cfg = crearAlmacen(m).config();
-  assert.deepEqual(cfg, { nombre: "pastor", letra: "grande", ultimoRespaldo: null });
+  assert.deepEqual(cfg, { nombre: "pastor", letra: "grande", ultimoRespaldo: null, avisoYouVersion: false });
 });
 
 test("config se sanea al importar", () => {
   const a = crearAlmacen(memoria());
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: 42, letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", otro: 1 } }));
-  assert.deepEqual(a.config(), { nombre: "pastor", letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z" });
+  assert.deepEqual(a.config(), { nombre: "pastor", letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", avisoYouVersion: false });
 });
 
 test("crearAlmacen sin argumentos no lanza si localStorage falla o no existe", () => {
@@ -150,4 +150,15 @@ test("crearAlmacen sin argumentos no lanza si localStorage falla o no existe", (
   } finally {
     if (orig) Object.defineProperty(globalThis, "localStorage", orig); else delete globalThis.localStorage;
   }
+});
+
+test("avisoYouVersion: solo booleano true; se conserva en guardarConfig e importar", () => {
+  const a = crearAlmacen(memoria());
+  assert.equal(a.config().avisoYouVersion, false);
+  a.guardarConfig({ avisoYouVersion: true });
+  assert.equal(a.config().avisoYouVersion, true);
+  a.guardarConfig({ avisoYouVersion: "si" });
+  assert.equal(a.config().avisoYouVersion, false);
+  a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: { avisoYouVersion: true } }));
+  assert.equal(a.config().avisoYouVersion, true);
 });

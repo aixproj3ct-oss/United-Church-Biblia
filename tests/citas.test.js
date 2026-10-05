@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseCita, urlTLA, setRangoEnUrl, getRangoEnUrl } from "../src/citas.js";
+import { parseCita, urlTLA, setRangoEnUrl, getRangoEnUrl, ordenBiblico } from "../src/citas.js";
 
 const OK = [
   ["jn 3 16", "Juan 3:16", "JHN.3.16"], ["jn 3:16", "Juan 3:16", "JHN.3.16"], ["jn 3.16", "Juan 3:16", "JHN.3.16"],
@@ -106,4 +106,10 @@ test("acepta formato 3v16", () => {
   assert.equal(r.ok, true);
   assert.equal(r.etiqueta, "Juan 3:16");
   assert.equal(r.codigoRef, "JHN.3.16");
+});
+
+test("ordenBiblico sigue el orden canónico", () => {
+  const cs = ["GEN.1.1", "EXO.1", "JHN.3.16", "JHN.3.17", "REV.22"];
+  for (let i = 1; i < cs.length; i++) assert.ok(ordenBiblico(cs[i - 1]) < ordenBiblico(cs[i]), cs[i]);
+  assert.ok(ordenBiblico("1CO.13.4-7") < ordenBiblico("2CO.1"));
 });

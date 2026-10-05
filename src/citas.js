@@ -114,3 +114,10 @@ export function parseCita(texto) {
   const codigoRef = `${libro.codigo}.${n.cap}` + (n.v1 ? `.${n.v1}` + (!rangoRecortado && n.v2 ? `-${n.v2}` : "") : "");
   return { ok: true, ref, etiqueta, codigoRef, url: urlTLA(ref), corregido, ...(rangoRecortado && { rangoRecortado }) };
 }
+
+// Número ordenable según el orden canónico: libro, capítulo, versículo ("1CO.13.4-7").
+export function ordenBiblico(codigo) {
+  const [cod, cap, v] = String(codigo).split(".");
+  const i = LISTA.findIndex(l => l.codigo === cod);
+  return (i < 0 ? 999 : i + 1) * 1e6 + (parseInt(cap, 10) || 0) * 1000 + (parseInt(v, 10) || 0);
+}

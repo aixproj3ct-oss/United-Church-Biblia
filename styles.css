@@ -32,14 +32,14 @@ button{font:inherit;cursor:pointer}
 .btn-peligro{border:0;border-radius:14px;background:#fee2e2;color:var(--mal);padding:0 20px;min-height:52px}
 .pista{min-height:30px;margin:10px 8px 0;color:var(--sub);display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .pista b{color:var(--azul)}.pista .mal{color:var(--mal)}
-.sugerencia{border:1px solid var(--linea);background:#fff;border-radius:12px;padding:6px 14px;min-height:44px;color:var(--azul)}
+.sugerencia{border:1px solid var(--linea);background:#fff;border-radius:12px;padding:6px 14px;min-height:48px;color:var(--azul)}
 .estrella{border:0;background:transparent;color:var(--dorado);font-size:1.4em;min-width:48px;min-height:48px}
 .grid-inicio{display:grid;grid-template-columns:1.25fr 1fr;gap:22px;margin-top:18px}
 .card{background:var(--card);border-radius:var(--r);border:1px solid var(--linea);padding:22px 24px;box-shadow:0 6px 22px rgba(15,23,42,.05)}
 .card h2{margin:0;font-size:.8em;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);font-weight:650}
 .card-cab{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .card-cab h2{font-size:1.05em;letter-spacing:0;text-transform:none;color:var(--tinta)}
-.link{border:0;background:#eef2ff;color:var(--azul);border-radius:10px;padding:6px 14px;min-height:40px}
+.link{border:0;background:#eef2ff;color:var(--azul);border-radius:10px;padding:6px 14px;min-height:48px}
 .domingo{background:linear-gradient(120deg,#fff 55%,#fdf6e7 100%)}
 .domingo h3{margin:6px 0 4px;font-size:1.75em;line-height:1.15}
 .meta{color:var(--sub);margin-bottom:14px}
@@ -60,6 +60,7 @@ button{font:inherit;cursor:pointer}
 .form label{display:grid;gap:6px;color:var(--sub);font-size:.92em}
 .form input,.form select,.form textarea{font:inherit;border:1px solid var(--linea);border-radius:14px;padding:12px 14px;min-height:52px;color:var(--tinta);background:#fff}
 .form textarea{min-height:200px;resize:vertical}
+.acciones-dlg{flex-direction:row-reverse}
 .acciones{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap}
 .prevista li{padding:6px 0}.prevista .ok{color:var(--ok)}.prevista .mal{color:var(--mal)}
 .domingos-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:22px}
@@ -67,7 +68,7 @@ button{font:inherit;cursor:pointer}
 .domingo-mini.sel{border-color:var(--azul);box-shadow:0 0 0 3px rgba(37,99,235,.2)}
 .serie-bloque{margin-bottom:18px}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-.chip{border:1px solid var(--linea);background:#fff;border-radius:12px;padding:8px 14px;min-height:44px}
+.chip{border:1px solid var(--linea);background:#fff;border-radius:12px;padding:8px 14px;min-height:48px}
 .chip.sel{background:var(--azul);color:#fff;border-color:var(--azul)}
 dialog{border:0;border-radius:22px;padding:26px;width:min(520px,92vw);box-shadow:0 30px 80px rgba(15,23,42,.35)}
 dialog::backdrop{background:rgba(15,23,42,.45)}

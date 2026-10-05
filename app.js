@@ -1,5 +1,5 @@
 // Interfaz de United Church: el texto bíblico lo muestra YouVersion; aquí solo hay referencias y datos del pastor.
-import { parseCita } from "./src/citas.js";
+import { parseCita, ordenBiblico } from "./src/citas.js";
 import { crearAlmacen } from "./src/datos.js";
 
 const almacen = crearAlmacen();
@@ -31,11 +31,15 @@ function tono(t) { let h = 0; for (const c of String(t)) h = (h * 31 + c.charCod
 const serieDe = codigo => almacen.favoritos().find(f => f.cita.codigo === codigo)?.serie || "";
 const fechaLarga = iso => new Date(iso + "T12:00").toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" });
 
-function aviso(msg) { const a = $("#aviso"); a.textContent = msg; a.hidden = false; clearTimeout(aviso.t); aviso.t = setTimeout(() => (a.hidden = true), 3500); }
+function aviso(msg, ms = 3500) { const a = $("#aviso"); a.textContent = msg; a.hidden = false; clearTimeout(aviso.t); aviso.t = setTimeout(() => (a.hidden = true), ms); }
 
 function abrir(cita) {
   if (!navigator.onLine) return aviso("Sin internet: conéctate al Wi-Fi para abrir el pasaje.");
   almacen.registrarHistorial(cita);
+  if (!almacen.config().avisoYouVersion) {
+    almacen.guardarConfig({ avisoYouVersion: true });
+    aviso("Si el pasaje se abre en el navegador en vez de la app Biblia: Ajustes › Aplicaciones › Biblia › Abrir enlaces compatibles.", 8000);
+  }
   window.open(cita.url, "_blank", "noopener");
   pintar();
 }
@@ -100,7 +104,7 @@ function vistaFavoritos() {
   if (!fs.length) return `<h1 class="titulo-vista">Favoritos y series</h1><p class="vacio">Toca ☆ en cualquier pasaje para guardarlo en una serie.</p>`;
   return `<h1 class="titulo-vista">Favoritos y series</h1>` + almacen.series().map(s => `<section class="card serie-bloque">
       <div class="card-cab"><h2><span class="tag">${esc(s)}</span></h2></div><ul class="lista">
-      ${fs.filter(f => f.serie === s).map(f => `<li><button class="fila" data-cita="${enc(f.cita)}"><span class="ic-serie" style="--h:${tono(s)}">${esc(s[0])}</span><b>${esc(f.cita.etiqueta)}</b><span class="chev">›</span></button>
+      ${fs.filter(f => f.serie === s).sort((x, y) => ordenBiblico(x.cita.codigo) - ordenBiblico(y.cita.codigo)).map(f => `<li><button class="fila" data-cita="${enc(f.cita)}"><span class="ic-serie" style="--h:${tono(s)}">${esc(s[0])}</span><b>${esc(f.cita.etiqueta)}</b><span class="chev">›</span></button>
         <button class="estrella" data-quitar="${esc(f.id)}" aria-label="Quitar de favoritos">✕</button></li>`).join("")}</ul></section>`).join("");
 }
 
@@ -171,7 +175,7 @@ document.addEventListener("click", ev => {
   if (t.id === "c-exportar") {
     const blob = new Blob([almacen.exportar()], { type: "application/json" });
     const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `united-church-respaldo-${hoyISO()}.json` });
-    a.click(); URL.revokeObjectURL(a.href); pintar(); aviso("Copia descargada");
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); pintar(); aviso("Copia descargada");
   }
 });
 
@@ -192,18 +196,23 @@ document.addEventListener("submit", ev => {
     pintar(); aviso("Domingo guardado");
   }
   if (f.id === "f-config") { almacen.guardarConfig({ nombre: $("#c-nombre").value.trim() || "pastor", letra: $("#c-letra").value }); pintar(); aviso("Guardado"); }
-  if (f.id === "f-fav" && ev.submitter?.value === "ok") {
-    almacen.agregarFavorito($("#fav-nueva").value, favPendiente);
-    $("#dlg-fav").close(); pintar(); aviso("Guardado en favoritos");
-  } else if (f.id === "f-fav") $("#dlg-fav").close();
+  if (f.id === "f-fav") {
+    const guardar = ev.submitter?.value !== "cancelar" && favPendiente;
+    if (guardar) almacen.agregarFavorito($("#fav-nueva").value, favPendiente);
+    $("#dlg-fav").close();
+    if (guardar) { pintar(); aviso("Guardado en favoritos"); }
+  }
 });
 
 document.addEventListener("change", async ev => {
   if (ev.target.id !== "c-importar" || !ev.target.files[0]) return;
-  try { almacen.importar(await ev.target.files[0].text()); pintar(); aviso("Copia restaurada"); }
+  const inp = ev.target;
+  try { almacen.importar(await inp.files[0].text()); pintar(); aviso("Copia restaurada"); }
   catch { aviso("Ese archivo no es una copia válida de United Church"); }
+  inp.value = "";
 });
 
+$("#dlg-fav").addEventListener("close", () => { favPendiente = null; });
 window.addEventListener("offline", () => aviso("Sin internet: los pasajes se abrirán cuando vuelva el Wi-Fi."));
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 pintar();
