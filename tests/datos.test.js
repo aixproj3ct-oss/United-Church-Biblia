@@ -65,3 +65,60 @@ test("storage corrupto arranca vacío sin romperse", () => {
   const s = memoria(); s.setItem("uc-biblia-v1", "{roto");
   assert.deepEqual(crearAlmacen(s).domingos(), []);
 });
+
+test("items corruptos en storage se descartan sin lanzar", () => {
+  const s = memoria();
+  s.setItem("uc-biblia-v1", JSON.stringify({
+    version: 1,
+    domingos: [{ id: "ok", fecha: "2026-10-05", titulo: "Bueno", citas: [cita("JHN.3.16")] }, { id: "bad", fecha: "invalid" }],
+    favoritos: [{ id: "ok", serie: "Tema", cita: cita("JHN.3.16") }, { id: "bad", serie: "Tema" }],
+    historial: [{ cita: cita("JHN.3.16"), cuando: "2026-10-05T12:00:00Z" }, { cita: {} }],
+    config: { nombre: "test", letra: "grande", ultimoRespaldo: null }
+  }));
+  const a = crearAlmacen(s);
+  assert.equal(a.domingos().length, 1);
+  assert.equal(a.favoritos().length, 1);
+  assert.equal(a.historial().length, 1);
+  assert.doesNotThrow(() => a.domingos());
+  assert.doesNotThrow(() => a.historial());
+});
+
+test("importar con 100 entradas de historial guarda 30", () => {
+  const a = crearAlmacen(memoria());
+  const data = { version: 1, domingos: [], favoritos: [], historial: [], config: { nombre: "test", letra: "grande", ultimoRespaldo: null } };
+  data.historial = Array.from({ length: 100 }, (_, i) => ({ cita: cita(`PSA.${i+1}`), cuando: "2026-10-05T12:00:00Z" }));
+  a.importar(JSON.stringify(data));
+  assert.equal(a.historial().length, 30);
+});
+
+test("importar con config:{} usa valores por defecto", () => {
+  const a = crearAlmacen(memoria());
+  const data = { version: 1, domingos: [], favoritos: [], historial: [], config: {} };
+  a.importar(JSON.stringify(data));
+  const cfg = a.config();
+  assert.equal(cfg.nombre, "pastor");
+  assert.equal(cfg.letra, "grande");
+  assert.equal(cfg.ultimoRespaldo, null);
+});
+
+test("setItem lanzando excepción no rompe guardarDomingo", () => {
+  const memFailing = () => {
+    const m = new Map();
+    return {
+      getItem: k => m.get(k) ?? null,
+      setItem: () => { throw new Error("quota exceeded"); }
+    };
+  };
+  const a = crearAlmacen(memFailing());
+  assert.doesNotThrow(() => {
+    a.guardarDomingo({ fecha: "2026-10-05", titulo: "Test", citas: [cita("JHN.3.16")] });
+  });
+  assert.equal(a.domingos().length, 1);
+});
+
+test("agregarFavorito ignora cita sin codigo string", () => {
+  const a = crearAlmacen(memoria());
+  a.agregarFavorito("Serie", { etiqueta: "test", url: "https://www.bible.com/bible/176/JHN.3.TLA" });
+  a.agregarFavorito("Serie", { codigo: null, etiqueta: "test", url: "https://www.bible.com/bible/176/JHN.3.TLA" });
+  assert.equal(a.favoritos().length, 0);
+});

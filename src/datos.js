@@ -8,11 +8,24 @@ const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [],
 const valido = e => e && e.version === 1 && Array.isArray(e.domingos) && Array.isArray(e.favoritos)
   && Array.isArray(e.historial) && e.config && typeof e.config === "object";
 
+const validoCita = c => c && typeof c.codigo === "string" && typeof c.etiqueta === "string" && typeof c.url === "string" && c.url.startsWith("https://www.bible.com/bible/176/");
+const validoDomingo = d => d && typeof d.id === "string" && typeof d.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.fecha) && typeof d.titulo === "string" && Array.isArray(d.citas) && d.citas.every(validoCita);
+const validoFavorito = f => f && typeof f.id === "string" && typeof f.serie === "string" && validoCita(f.cita);
+const validoHistorial = h => h && validoCita(h.cita) && typeof h.cuando === "string";
+
 export function crearAlmacen(storage = globalThis.localStorage, reloj = () => new Date()) {
   let e;
   try { e = JSON.parse(storage.getItem(CLAVE)); } catch { e = null; }
   if (!valido(e)) e = vacio();
-  const guardar = () => storage.setItem(CLAVE, JSON.stringify(e));
+  else {
+    e.domingos = (e.domingos || []).filter(validoDomingo);
+    e.favoritos = (e.favoritos || []).filter(validoFavorito);
+    e.historial = (e.historial || []).filter(validoHistorial);
+  }
+
+  const guardar = () => {
+    try { storage.setItem(CLAVE, JSON.stringify(e)); } catch { /* quota exceeded, continue in memory */ }
+  };
   const nuevoId = () => reloj().getTime().toString(36) + Math.random().toString(36).slice(2, 7);
 
   return {
@@ -32,6 +45,7 @@ export function crearAlmacen(storage = globalThis.localStorage, reloj = () => ne
     favoritos: () => [...e.favoritos],
     series: () => [...new Set(e.favoritos.map(f => f.serie))].sort((a, b) => a.localeCompare(b, "es")),
     agregarFavorito(serie, cita) {
+      if (!validoCita(cita) || !cita.codigo) return;
       serie = String(serie || "").trim() || "Favoritos";
       if (e.favoritos.some(f => f.serie === serie && f.cita.codigo === cita.codigo)) return;
       e.favoritos.push({ id: nuevoId(), serie, cita });
@@ -40,6 +54,7 @@ export function crearAlmacen(storage = globalThis.localStorage, reloj = () => ne
     quitarFavorito(id) { e.favoritos = e.favoritos.filter(f => f.id !== id); guardar(); },
     historial: () => [...e.historial],
     registrarHistorial(cita) {
+      if (!validoCita(cita)) return;
       e.historial = [{ cita, cuando: reloj().toISOString() }, ...e.historial.filter(h => h.cita.codigo !== cita.codigo)]
         .slice(0, MAX_HISTORIAL);
       guardar();
@@ -56,6 +71,11 @@ export function crearAlmacen(storage = globalThis.localStorage, reloj = () => ne
       try { n = JSON.parse(texto); } catch { throw new Error("Archivo no válido"); }
       if (!valido(n)) throw new Error("Archivo no válido");
       delete n.exportado;
+      n.domingos = (n.domingos || []).filter(validoDomingo);
+      n.favoritos = (n.favoritos || []).filter(validoFavorito);
+      n.historial = (n.historial || []).filter(validoHistorial).slice(0, MAX_HISTORIAL);
+      n.config = { ...vacio().config, ...n.config };
+      if (!["normal", "grande", "muy-grande"].includes(n.config.letra)) n.config.letra = "grande";
       e = n;
       guardar();
     },

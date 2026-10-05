@@ -4,7 +4,9 @@
 import { LIBROS } from "./libros.js";
 
 export const VERSION_TLA = 176;
-export let RANGO_EN_URL = true; // Task 7: false si YouVersion no acepta "JHN.3.16-18" en el enlace
+let rangoEnUrl = true; // Task 7: false si YouVersion no acepta "JHN.3.16-18" en el enlace
+export function setRangoEnUrl(v) { rangoEnUrl = v; }
+export function getRangoEnUrl() { return rangoEnUrl; }
 const VERSICULO_MAX = 176;      // el versículo más largo de la Biblia (Salmo 119:176)
 
 const LISTA = LIBROS.map(([codigo, nombre, capitulos, alias]) => ({ codigo, nombre, capitulos, alias }));
@@ -17,7 +19,9 @@ const ORD_VALOR = { primera: 1, primero: 1, primer: 1, "1ra": 1, "1ro": 1, "1er"
   segunda: 2, segundo: 2, "2da": 2, "2do": 2, "2a": 2, ii: 2, tercera: 3, tercero: 3, "3ra": 3, "3ro": 3, "3er": 3, "3a": 3, iii: 3 };
 
 export function normalizar(t) {
-  return String(t ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+  let s = String(t ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[º°ª]/g, "").replace(/\.º/g, "");
+  s = s.replace(/\b(cap|capitulo|capítulo)\b/g, "").replace(/\s+/g, " ").trim();
+  return s;
 }
 
 const clave = l => normalizar(l.nombre).replace(/ /g, "");
@@ -51,6 +55,7 @@ function buscarLibro(num, letras) {
 
 function leerNumeros(txt) {
   const t = txt.replace(/[–—]/g, "-")
+    .replace(/(\d)v(\d)/g, "$1 $2")
     .replace(/\b(versiculos?|vers|vv|v|capitulo|cap)\b/g, " ")
     .replace(/\bdel\b/g, " ")
     .replace(/\b(al|a|hasta)\b/g, " - ")
@@ -69,7 +74,7 @@ function leerNumeros(txt) {
 
 export function urlTLA({ codigo, cap, v1, v2 }) {
   let r = `${codigo}.${cap}`;
-  if (v1) r += `.${v1}` + (v2 && RANGO_EN_URL ? `-${v2}` : "");
+  if (v1) r += `.${v1}` + (v2 && getRangoEnUrl() ? `-${v2}` : "");
   return `https://www.bible.com/bible/${VERSION_TLA}/${r}.TLA`;
 }
 
@@ -104,7 +109,8 @@ export function parseCita(texto) {
   }
   const ref = { codigo: libro.codigo, nombre: libro.nombre, cap: n.cap, v1: n.v1, v2: n.v2 };
   const nombreVisible = libro.codigo === "PSA" ? "Salmo" : libro.nombre;
-  const etiqueta = `${nombreVisible} ${n.cap}` + (n.v1 ? `:${n.v1}` + (n.v2 ? `-${n.v2}` : "") : "");
-  const codigoRef = `${libro.codigo}.${n.cap}` + (n.v1 ? `.${n.v1}` + (n.v2 ? `-${n.v2}` : "") : "");
-  return { ok: true, ref, etiqueta, codigoRef, url: urlTLA(ref), corregido };
+  const rangoRecortado = n.v2 !== null && !getRangoEnUrl();
+  const etiqueta = `${nombreVisible} ${n.cap}` + (n.v1 ? `:${n.v1}` + (!rangoRecortado && n.v2 ? `-${n.v2}` : "") : "");
+  const codigoRef = `${libro.codigo}.${n.cap}` + (n.v1 ? `.${n.v1}` + (!rangoRecortado && n.v2 ? `-${n.v2}` : "") : "");
+  return { ok: true, ref, etiqueta, codigoRef, url: urlTLA(ref), corregido, ...(rangoRecortado && { rangoRecortado }) };
 }
