@@ -81,3 +81,9 @@ test("capituloVecino cruza de libro y se detiene en los extremos", () => {
   assert.equal(numeroLibro("REV"), 66);
   assert.equal(codigoLibro(43), "JHN");
 });
+
+test("capítulo que no tiene ninguna versión cargada: marca vacio (nunca pantalla en blanco)", () => {
+  const r = armarPasaje({ principal: { sigla: "X", cap: null }, alternativas: [], desde: null, hasta: null });
+  assert.equal(r.vacio, true);
+  assert.equal(p(null, null).vacio, false);
+});

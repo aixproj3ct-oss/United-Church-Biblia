@@ -62,5 +62,6 @@ export function armarPasaje({ principal, alternativas = [], desde = null, hasta 
     bloques: bloques.map(b => ({ desde: b.desde, hasta: b.hasta, etiqueta: b.desde === b.hasta ? `${b.desde}` : `${b.desde}-${b.hasta}`, texto: b.texto, sigla: b.sigla })),
     rellenoDe: [...rellenoDe],
     sinTexto,
+    vacio: desde === null && maximo === 0,
   };
 }

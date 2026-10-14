@@ -5,6 +5,7 @@ import { crearBiblias } from "./src/biblias.js";
 import { decodificar, importarBiblia, ErrorBiblia } from "./src/importar.js";
 import { armarPasaje, refDeCodigo, etiquetaRef, codigoRef, capituloVecino } from "./src/pasaje.js";
 import { LIBROS } from "./src/libros.js";
+import { nuevaLectura } from "./src/lectura.js";
 
 const almacen = crearAlmacen();
 const biblias = crearBiblias();
@@ -41,17 +42,20 @@ const fechaLarga = iso => new Date(iso + "T12:00").toLocaleDateString("es", { we
 
 function aviso(msg, ms = 3500) { const a = $("#aviso"); a.textContent = msg; a.hidden = false; clearTimeout(aviso.t); aviso.t = setTimeout(() => (a.hidden = true), ms); }
 
-function abrir(cita, completo = false) {
+function abrir(cita, completo = false, navegando = false) {
   const ref = refDeCodigo(cita.codigo);
   if (!ref) return aviso("No pude abrir esa cita");
   almacen.registrarHistorial({ codigo: cita.codigo, etiqueta: cita.etiqueta });
-  lectura = { ref, cita: { codigo: cita.codigo, etiqueta: cita.etiqueta }, completo: completo || !ref.v1, sigla: lectura?.sigla ?? null };
-  ir("lector", true);
+  const r = nuevaLectura(lectura, { codigo: cita.codigo, etiqueta: cita.etiqueta }, ref, { completo, navegando });
+  lectura = r.lectura;
+  if (!r.reemplazar) return ir("lector", true);
+  history.replaceState({ vista: "lector", lectura }, "", "#lector");
+  pintar(); $("#vista").scrollTop = 0;
 }
 
 function abrirCapitulo(codigo, cap) {
   const ref = { codigo, cap, v1: null, v2: null };
-  abrir({ codigo: codigoRef(ref), etiqueta: etiquetaRef(ref) }, true);
+  abrir({ codigo: codigoRef(ref), etiqueta: etiquetaRef(ref) }, true, vista === "lector");
 }
 
 function itemCita(c, i) {
@@ -162,7 +166,7 @@ async function pintarLector() {
   const antes = capituloVecino(codigo, cap, -1), despues = capituloVecino(codigo, cap, 1);
   const textoHTML = r.bloques.map(b => `<span class="vers${b.sigla ? " relleno" : ""}"><b class="num">${esc(b.etiqueta)}</b>${esc(b.texto)}${b.sigla ? ` <small class="de">${esc(b.sigla)}</small>` : ""}</span>`).join(" ");
   const avisoRelleno = r.rellenoDe.length ? `<p class="aviso-relleno">Este pasaje no está en tu archivo ${esc(actual)}; se muestra en ${esc(r.rellenoDe.join(" y "))}</p>` : "";
-  const sinTexto = r.sinTexto.length ? `<p class="meta">${r.bloques.length ? `Versículo${r.sinTexto.length > 1 ? "s" : ""} ${esc(r.sinTexto.join(", "))}: ` : ""}Este versículo no está en las Biblias cargadas.</p>` : "";
+  const sinTexto = r.vacio ? `<p class="meta">Este capítulo no está en las Biblias cargadas.</p>` : r.sinTexto.length ?`<p class="meta">${r.bloques.length ? `Versículo${r.sinTexto.length > 1 ? "s" : ""} ${esc(r.sinTexto.join(", "))}: ` : ""}Este versículo no está en las Biblias cargadas.</p>` : "";
   cuerpo.innerHTML = `${avisoRelleno}<p class="texto-biblia" lang="es">${textoHTML}</p>${sinTexto}
     <div class="lector-pie">
       <button class="btn-sec" ${antes ? `data-capitulo="${enc(antes)}"` : "disabled"}>◀ Capítulo anterior</button>
