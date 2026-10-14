@@ -1,7 +1,7 @@
-// Los 66 libros de la Biblia: código USFM (el que usa bible.com), nombre para mostrar, cantidad de capítulos
+// Los 66 libros de la Biblia: código USFM, nombre para mostrar, cantidad de capítulos
 // y abreviaturas en español (normalizadas: minúsculas, sin acentos ni espacios). Solo datos públicos:
-// este proyecto nunca guarda texto bíblico (la TLA tiene derechos de las Sociedades Bíblicas Unidas).
-// Numeración protestante (la de YouVersion/TLA): Joel tiene 3 capítulos.
+// el repositorio nunca contiene texto bíblico; cada tablet carga su propia Biblia en XML.
+// Numeración protestante: Joel tiene 3 capítulos.
 export const LIBROS = [
   ["GEN", "Génesis", 50, ["gn", "gen", "gene", "genesis"]],
   ["EXO", "Éxodo", 40, ["ex", "exo", "exod", "exodo"]],

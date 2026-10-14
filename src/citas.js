@@ -1,12 +1,8 @@
 // Lector de citas bíblicas en español: convierte lo que escribe el pastor ("jn 3 16", "1 co 13 del 4 al 6")
-// en una referencia validada y en el enlace de YouVersion/bible.com en TLA (versión 176).
+// en una referencia validada que abre el lector de la app.
 // Nunca abre un pasaje distinto del que muestra en `etiqueta`: ante cualquier duda devuelve un error.
 import { LIBROS } from "./libros.js";
 
-export const VERSION_TLA = 176;
-let rangoEnUrl = true; // Task 7: false si YouVersion no acepta "JHN.3.16-18" en el enlace
-export function setRangoEnUrl(v) { rangoEnUrl = v; }
-export function getRangoEnUrl() { return rangoEnUrl; }
 const VERSICULO_MAX = 176;      // el versículo más largo de la Biblia (Salmo 119:176)
 
 const LISTA = LIBROS.map(([codigo, nombre, capitulos, alias]) => ({ codigo, nombre, capitulos, alias }));
@@ -72,12 +68,6 @@ function leerNumeros(txt) {
   return null;
 }
 
-export function urlTLA({ codigo, cap, v1, v2 }) {
-  let r = `${codigo}.${cap}`;
-  if (v1) r += `.${v1}` + (v2 && getRangoEnUrl() ? `-${v2}` : "");
-  return `https://www.bible.com/bible/${VERSION_TLA}/${r}.TLA`;
-}
-
 export function parseCita(texto) {
   let t = normalizar(texto).replace(/([a-z])\./g, "$1 ").replace(/\s+/g, " ").trim();
   if (!t) return error("Escribe una cita, por ejemplo: jn 3 16");
@@ -109,10 +99,9 @@ export function parseCita(texto) {
   }
   const ref = { codigo: libro.codigo, nombre: libro.nombre, cap: n.cap, v1: n.v1, v2: n.v2 };
   const nombreVisible = libro.codigo === "PSA" ? "Salmo" : libro.nombre;
-  const rangoRecortado = n.v2 !== null && !getRangoEnUrl();
-  const etiqueta = `${nombreVisible} ${n.cap}` + (n.v1 ? `:${n.v1}` + (!rangoRecortado && n.v2 ? `-${n.v2}` : "") : "");
-  const codigoRef = `${libro.codigo}.${n.cap}` + (n.v1 ? `.${n.v1}` + (!rangoRecortado && n.v2 ? `-${n.v2}` : "") : "");
-  return { ok: true, ref, etiqueta, codigoRef, url: urlTLA(ref), corregido, ...(rangoRecortado && { rangoRecortado }) };
+  const etiqueta = `${nombreVisible} ${n.cap}` + (n.v1 ? `:${n.v1}` + (n.v2 ? `-${n.v2}` : "") : "");
+  const codigoRef = `${libro.codigo}.${n.cap}` + (n.v1 ? `.${n.v1}` + (n.v2 ? `-${n.v2}` : "") : "");
+  return { ok: true, ref, etiqueta, codigoRef, corregido };
 }
 
 // Número ordenable según el orden canónico: libro, capítulo, versículo ("1CO.13.4-7").

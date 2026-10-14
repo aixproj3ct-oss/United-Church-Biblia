@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseCita, urlTLA, setRangoEnUrl, getRangoEnUrl, ordenBiblico } from "../src/citas.js";
+import { parseCita, ordenBiblico } from "../src/citas.js";
 
 const OK = [
   ["jn 3 16", "Juan 3:16", "JHN.3.16"], ["jn 3:16", "Juan 3:16", "JHN.3.16"], ["jn 3.16", "Juan 3:16", "JHN.3.16"],
@@ -38,7 +38,7 @@ for (const [entrada, etiqueta, codigoRef] of OK) {
     assert.equal(r.ok, true, r.error);
     assert.equal(r.etiqueta, etiqueta);
     assert.equal(r.codigoRef, codigoRef);
-    assert.equal(r.url, `https://www.bible.com/bible/176/${codigoRef}.TLA`);
+    assert.equal("url" in r, false);
   });
 }
 
@@ -67,25 +67,6 @@ test("sugerencias útiles", () => {
   assert.ok(parseCita("jaun 3 16").sugerencias.includes("Juan"));
   assert.deepEqual(parseCita("corintios 13").sugerencias, ["1 Corintios", "2 Corintios"]);
   assert.equal(parseCita("jaun 3 16").numeros, "3 16");
-});
-
-test("urlTLA arma capítulo, versículo y rango", () => {
-  assert.equal(urlTLA({ codigo: "PSA", cap: 23, v1: null, v2: null }), "https://www.bible.com/bible/176/PSA.23.TLA");
-  assert.equal(urlTLA({ codigo: "JHN", cap: 3, v1: 16, v2: null }), "https://www.bible.com/bible/176/JHN.3.16.TLA");
-  assert.equal(urlTLA({ codigo: "1CO", cap: 13, v1: 4, v2: 7 }), "https://www.bible.com/bible/176/1CO.13.4-7.TLA");
-});
-
-test("setRangoEnUrl(false) acorta etiqueta, codigoRef y url al primer versículo", () => {
-  setRangoEnUrl(false);
-  try {
-    const r = parseCita("1 co 13:4-7");
-    assert.equal(r.etiqueta, "1 Corintios 13:4");
-    assert.equal(r.codigoRef, "1CO.13.4");
-    assert.ok(r.url.includes("1CO.13.4.TLA"));
-    assert.equal(r.rangoRecortado, true);
-  } finally {
-    setRangoEnUrl(true);
-  }
 });
 
 test("normalizar quita º ° ª y secuencia .º", () => {

@@ -3,7 +3,7 @@ const CLAVE = "uc-biblia-v1";
 const MAX_HISTORIAL = 30;
 
 const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [],
-  config: { nombre: "pastor", letra: "grande", ultimoRespaldo: null, avisoYouVersion: false } });
+  config: { nombre: "pastor", letra: "grande", ultimoRespaldo: null } });
 
 const LETRAS = ["normal", "grande", "muy-grande"];
 const sanearConfig = c => {
@@ -12,7 +12,6 @@ const sanearConfig = c => {
     nombre: typeof o.nombre === "string" && o.nombre.trim() ? o.nombre : "pastor",
     letra: LETRAS.includes(o.letra) ? o.letra : "grande",
     ultimoRespaldo: typeof o.ultimoRespaldo === "string" ? o.ultimoRespaldo : null,
-    avisoYouVersion: o.avisoYouVersion === true,
   };
 };
 
@@ -24,7 +23,8 @@ const almacenamientoPorDefecto = () => {
 const valido = e => e && e.version === 1 && Array.isArray(e.domingos) && Array.isArray(e.favoritos)
   && Array.isArray(e.historial) && e.config && typeof e.config === "object";
 
-const validoCita = c => c && typeof c.codigo === "string" && typeof c.etiqueta === "string" && typeof c.url === "string" && c.url.startsWith("https://www.bible.com/bible/176/");
+// Las citas guardadas antes del lector propio traen además `url` (bible.com); se aceptan y se ignora.
+const validoCita = c => c && typeof c.codigo === "string" && /^[0-9A-Z]{3}\.\d+/.test(c.codigo) && typeof c.etiqueta === "string";
 const validoDomingo = d => d && typeof d.id === "string" && typeof d.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.fecha) && typeof d.titulo === "string" && Array.isArray(d.citas) && d.citas.every(validoCita);
 const validoFavorito = f => f && typeof f.id === "string" && typeof f.serie === "string" && validoCita(f.cita);
 const validoHistorial = h => h && validoCita(h.cita) && typeof h.cuando === "string";

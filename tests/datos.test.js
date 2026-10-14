@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { crearAlmacen } from "../src/datos.js";
 
 const memoria = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
-const cita = (codigo, etiqueta = codigo) => ({ codigo, etiqueta, url: `https://www.bible.com/bible/176/${codigo}.TLA` });
+const cita = (codigo, etiqueta = codigo) => ({ codigo, etiqueta });
 
 test("domingos: guardar, ordenar, actual y borrar", () => {
   const a = crearAlmacen(memoria());
@@ -43,7 +43,7 @@ test("historial: el más reciente primero, sin repetir, máximo 30", () => {
 test("persiste entre instancias y config por defecto", () => {
   const s = memoria();
   const a = crearAlmacen(s);
-  assert.deepEqual(a.config(), { nombre: "pastor", letra: "grande", ultimoRespaldo: null, avisoYouVersion: false });
+  assert.deepEqual(a.config(), { nombre: "pastor", letra: "grande", ultimoRespaldo: null });
   a.guardarConfig({ nombre: "Pastor Luis" });
   assert.equal(crearAlmacen(s).config().nombre, "Pastor Luis");
 });
@@ -128,14 +128,14 @@ test("config se sanea al cargar: tipos inválidos y claves desconocidas", () => 
   m.setItem("uc-biblia-v1", JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: "  ", letra: "enorme", ultimoRespaldo: 5, extra: "x" } }));
   const cfg = crearAlmacen(m).config();
-  assert.deepEqual(cfg, { nombre: "pastor", letra: "grande", ultimoRespaldo: null, avisoYouVersion: false });
+  assert.deepEqual(cfg, { nombre: "pastor", letra: "grande", ultimoRespaldo: null });
 });
 
 test("config se sanea al importar", () => {
   const a = crearAlmacen(memoria());
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: 42, letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", otro: 1 } }));
-  assert.deepEqual(a.config(), { nombre: "pastor", letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", avisoYouVersion: false });
+  assert.deepEqual(a.config(), { nombre: "pastor", letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z" });
 });
 
 test("crearAlmacen sin argumentos no lanza si localStorage falla o no existe", () => {
@@ -150,17 +150,6 @@ test("crearAlmacen sin argumentos no lanza si localStorage falla o no existe", (
   } finally {
     if (orig) Object.defineProperty(globalThis, "localStorage", orig); else delete globalThis.localStorage;
   }
-});
-
-test("avisoYouVersion: solo booleano true; se conserva en guardarConfig e importar", () => {
-  const a = crearAlmacen(memoria());
-  assert.equal(a.config().avisoYouVersion, false);
-  a.guardarConfig({ avisoYouVersion: true });
-  assert.equal(a.config().avisoYouVersion, true);
-  a.guardarConfig({ avisoYouVersion: "si" });
-  assert.equal(a.config().avisoYouVersion, false);
-  a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: { avisoYouVersion: true } }));
-  assert.equal(a.config().avisoYouVersion, true);
 });
 
 test("estado ilegible o inválido se copia crudo antes de sobrescribirse", () => {
@@ -188,4 +177,23 @@ test("importar devuelve el número de elementos dañados descartados", () => {
   assert.equal(n, 3);
   assert.equal(a.favoritos().length, 1);
   assert.equal(a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: {} })), 0);
+});
+
+test("datos viejos con url de bible.com siguen siendo válidos (Review Focus 1)", () => {
+  const vieja = { codigo: "JHN.3.16", etiqueta: "Juan 3:16", url: "https://www.bible.com/bible/176/JHN.3.16.TLA" };
+  const a = crearAlmacen(memoria());
+  a.importar(JSON.stringify({ version: 1, domingos: [{ id: "d", fecha: "2026-10-05", titulo: "T", citas: [vieja] }],
+    favoritos: [{ id: "f", serie: "S", cita: vieja }], historial: [{ cita: vieja, cuando: "2026-10-05T12:00:00Z" }],
+    config: { nombre: "pastor", letra: "grande", ultimoRespaldo: null, avisoYouVersion: true } }));
+  assert.equal(a.domingos()[0].citas[0].codigo, "JHN.3.16");
+  assert.equal(a.favoritos()[0].cita.etiqueta, "Juan 3:16");
+  assert.equal(a.historial()[0].cita.codigo, "JHN.3.16");
+  assert.equal("avisoYouVersion" in a.config(), false);
+});
+
+test("una cita nueva sin url es válida; un código mal formado no", () => {
+  const a = crearAlmacen(memoria());
+  a.registrarHistorial({ codigo: "PSA.23", etiqueta: "Salmo 23" });
+  a.registrarHistorial({ codigo: "Juan", etiqueta: "Juan" });
+  assert.deepEqual(a.historial().map(h => h.cita.codigo), ["PSA.23"]);
 });
