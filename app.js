@@ -1,17 +1,24 @@
-// Interfaz de United Church: el texto bíblico lo muestra YouVersion; aquí solo hay referencias y datos del pastor.
+// Interfaz de United Church. El texto bíblico lo muestra el lector propio desde las Biblias cargadas en esta tablet.
 import { parseCita, ordenBiblico } from "./src/citas.js";
 import { crearAlmacen } from "./src/datos.js";
+import { crearBiblias } from "./src/biblias.js";
+import { decodificar, importarBiblia, ErrorBiblia } from "./src/importar.js";
+import { armarPasaje, refDeCodigo, etiquetaRef, codigoRef, capituloVecino } from "./src/pasaje.js";
+import { LIBROS } from "./src/libros.js";
 
 const almacen = crearAlmacen();
+const biblias = crearBiblias();
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const enc = o => encodeURIComponent(JSON.stringify(o));
 const dec = s => JSON.parse(decodeURIComponent(s));
 const hoyISO = () => new Date().toLocaleDateString("en-CA");
-const citaDe = r => ({ codigo: r.codigoRef, etiqueta: r.etiqueta, url: r.url });
-const VISTAS = ["inicio", "domingo", "favoritos", "historial", "config"];
-const vistaDeHash = () => { const h = location.hash.slice(1); return VISTAS.includes(h) ? h : "inicio"; };
+const citaDe = r => ({ codigo: r.codigoRef, etiqueta: r.etiqueta });
+const VISTAS = ["inicio", "domingo", "favoritos", "historial", "biblia", "config", "lector"];
+const vistaDeHash = () => { const h = location.hash.slice(1); return VISTAS.includes(h) && h !== "lector" ? h : "inicio"; };
 let vista = vistaDeHash(), domingoSel = null, favPendiente = null;
+// Lo que muestra el lector: la cita, si se ve el capítulo completo y qué versión (null = la principal).
+let lectura = null, libroSel = null;
 
 const PAISAJE = `<svg viewBox="0 0 1200 220" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs>
 <linearGradient id="cielo" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#fff7e6"/><stop offset=".7" stop-color="#fde7c2"/><stop offset="1" stop-color="#f5f6fb"/></linearGradient>
@@ -34,15 +41,17 @@ const fechaLarga = iso => new Date(iso + "T12:00").toLocaleDateString("es", { we
 
 function aviso(msg, ms = 3500) { const a = $("#aviso"); a.textContent = msg; a.hidden = false; clearTimeout(aviso.t); aviso.t = setTimeout(() => (a.hidden = true), ms); }
 
-function abrir(cita) {
-  almacen.registrarHistorial(cita);
-  if (!navigator.onLine) aviso("Sin internet; si descargaste la TLA en YouVersion se abrirá igual.", 6000);
-  else if (!almacen.config().avisoYouVersion) {
-    almacen.guardarConfig({ avisoYouVersion: true });
-    aviso("Si el pasaje se abre en el navegador en vez de la app Biblia: Ajustes › Aplicaciones › Biblia › Abrir enlaces compatibles.", 8000);
-  }
-  window.open(cita.url, "_blank", "noopener");
-  pintar();
+function abrir(cita, completo = false) {
+  const ref = refDeCodigo(cita.codigo);
+  if (!ref) return aviso("No pude abrir esa cita");
+  almacen.registrarHistorial({ codigo: cita.codigo, etiqueta: cita.etiqueta });
+  lectura = { ref, cita: { codigo: cita.codigo, etiqueta: cita.etiqueta }, completo: completo || !ref.v1, sigla: lectura?.sigla ?? null };
+  ir("lector", true);
+}
+
+function abrirCapitulo(codigo, cap) {
+  const ref = { codigo, cap, v1: null, v2: null };
+  abrir({ codigo: codigoRef(ref), etiqueta: etiquetaRef(ref) }, true);
 }
 
 function itemCita(c, i) {
@@ -122,12 +131,82 @@ function vistaHistorial() {
   return `<h1 class="titulo-vista">Historial</h1><section class="card">${h.length ? `<ul class="lista">${h.map(itemHistorial).join("")}</ul>` : `<p class="vacio">Todavía no abriste ningún pasaje.</p>`}</section>`;
 }
 
+// Orden de relleno: primero la RV 1960 si está cargada, luego las demás en orden de carga.
+const ordenAlternativas = (ms, actual) => ms.filter(m => m.sigla !== actual)
+  .sort((a, b) => (/1960/.test(b.sigla) ? 1 : 0) - (/1960/.test(a.sigla) ? 1 : 0) || a.orden - b.orden);
+
+function vistaLector() {
+  return `<div class="lector"><div class="lector-cab"><button class="btn-sec" data-volver>‹ Volver</button>
+    <h1>${esc(lectura.completo && lectura.ref.v1 ? etiquetaRef({ ...lectura.ref, v1: null, v2: null }) : lectura.cita.etiqueta)}</h1>
+    <span class="sigla" id="l-sigla"></span></div><div id="l-cuerpo" class="lector-cuerpo"><p class="meta">Abriendo…</p></div></div>`;
+}
+
+async function pintarLector() {
+  const cuerpo = $("#l-cuerpo");
+  const ms = await biblias.versiones();
+  if (!cuerpo.isConnected) return;
+  if (!ms.length) {
+    cuerpo.innerHTML = `<div class="card"><h2>Todavía no hay una Biblia cargada</h2><p class="meta">Carga una Biblia en Configuración → Versiones de la Biblia.</p>
+      <button class="btn-primario" data-ir="config">Ir a Configuración</button></div>`;
+    return;
+  }
+  const principal = await biblias.principal();
+  const actual = ms.some(m => m.sigla === lectura.sigla) ? lectura.sigla : principal;
+  const { codigo, cap, v1, v2 } = lectura.ref;
+  const alts = ordenAlternativas(ms, actual);
+  const caps = await Promise.all([actual, ...alts.map(m => m.sigla)].map(s => biblias.capitulo(s, codigo, cap)));
+  const r = armarPasaje({ principal: { sigla: actual, cap: caps[0] }, alternativas: alts.map((m, i) => ({ sigla: m.sigla, cap: caps[i + 1] })),
+    desde: lectura.completo ? null : v1, hasta: lectura.completo ? null : (v2 ?? v1) });
+  if (!cuerpo.isConnected) return;
+  $("#l-sigla").textContent = actual;
+  const antes = capituloVecino(codigo, cap, -1), despues = capituloVecino(codigo, cap, 1);
+  const textoHTML = r.bloques.map(b => `<span class="vers${b.sigla ? " relleno" : ""}"><b class="num">${esc(b.etiqueta)}</b>${esc(b.texto)}${b.sigla ? ` <small class="de">${esc(b.sigla)}</small>` : ""}</span>`).join(" ");
+  const avisoRelleno = r.rellenoDe.length ? `<p class="aviso-relleno">Este pasaje no está en tu archivo ${esc(actual)}; se muestra en ${esc(r.rellenoDe.join(" y "))}</p>` : "";
+  const sinTexto = r.sinTexto.length ? `<p class="meta">${r.bloques.length ? `Versículo${r.sinTexto.length > 1 ? "s" : ""} ${esc(r.sinTexto.join(", "))}: ` : ""}Este versículo no está en las Biblias cargadas.</p>` : "";
+  cuerpo.innerHTML = `${avisoRelleno}<p class="texto-biblia" lang="es">${textoHTML}</p>${sinTexto}
+    <div class="lector-pie">
+      <button class="btn-sec" ${antes ? `data-capitulo="${enc(antes)}"` : "disabled"}>◀ Capítulo anterior</button>
+      ${v1 ? `<button class="btn-sec" data-completo>${lectura.completo ? "Ver solo el pasaje" : "Ver capítulo completo"}</button>` : ""}
+      <span class="versiones">${ms.map(m => `<button class="chip ${m.sigla === actual ? "sel" : ""}" data-version="${esc(m.sigla)}">${esc(m.sigla)}</button>`).join("")}</span>
+      <button class="estrella" data-fav="${enc(lectura.cita)}" aria-label="Guardar en favoritos">☆</button>
+      <button class="btn-sec" ${despues ? `data-capitulo="${enc(despues)}"` : "disabled"}>Capítulo siguiente ▶</button>
+    </div>`;
+}
+
+function vistaBiblia() {
+  const h = almacen.historial()[0];
+  const ultimo = h && refDeCodigo(h.cita.codigo);
+  const libro = libroSel && LIBROS.find(l => l[0] === libroSel);
+  return `<h1 class="titulo-vista">Abrir Biblia</h1>
+    ${ultimo ? `<button class="btn-primario seguir" data-capitulo="${enc({ codigo: ultimo.codigo, cap: ultimo.cap })}">Seguir leyendo: ${esc(etiquetaRef({ ...ultimo, v1: null, v2: null }))}</button>` : ""}
+    ${libro ? `<section class="card"><div class="card-cab"><h2>${esc(libro[1])}</h2><button class="link" data-libro="">Todos los libros</button></div>
+        <div class="grilla-caps">${Array.from({ length: libro[2] }, (_, i) => `<button class="chip" data-capitulo="${enc({ codigo: libro[0], cap: i + 1 })}">${i + 1}</button>`).join("")}</div></section>`
+      : `<section class="card"><h2>Antiguo Testamento</h2><div class="grilla-libros">${LIBROS.slice(0, 39).map(l => `<button class="chip" data-libro="${l[0]}">${esc(l[1])}</button>`).join("")}</div></section>
+        <section class="card"><h2>Nuevo Testamento</h2><div class="grilla-libros">${LIBROS.slice(39).map(l => `<button class="chip" data-libro="${l[0]}">${esc(l[1])}</button>`).join("")}</div></section>`}`;
+}
+
+async function pintarVersiones() {
+  const s = $("#c-versiones");
+  const [ms, principal] = await Promise.all([biblias.versiones(), biblias.principal()]);
+  if (!s?.isConnected) return;
+  const n = x => x.toLocaleString("es");
+  s.innerHTML = `<h2>Versiones de la Biblia</h2>
+    ${ms.length ? `<ul class="lista">${ms.map(m => `<li class="version"><span class="txt"><b>${esc(m.sigla)}</b> · ${esc(m.nombre)}${m.sigla === principal ? ' <span class="tag">Principal</span>' : ""}
+      <small>${n(m.resumen.libros)} libros, ${n(m.resumen.versiculos)} versículos${m.resumen.agrupados ? ` (${n(m.resumen.agrupados)} agrupados)` : ""}</small></span>
+      ${m.sigla === principal ? "" : `<button class="btn-sec" data-principal="${esc(m.sigla)}">Hacer principal</button>`}
+      <button class="btn-peligro" data-quitar-version="${esc(m.sigla)}">Quitar</button></li>`).join("")}</ul>`
+      : `<p class="meta">No hay ninguna Biblia cargada. Carga un archivo XML (formato Zefania o «bible»).</p>`}
+    <div class="acciones" style="justify-content:flex-start"><label class="btn-primario" style="display:inline-grid;place-items:center">Cargar archivo<input type="file" id="c-biblia" accept=".xml,.XML,text/xml,application/xml" hidden></label></div>
+    <p class="meta">El texto se guarda solo en esta tablet y funciona sin internet.</p>`;
+}
+
 function vistaConfig() {
   const c = almacen.config();
   return `<h1 class="titulo-vista">Configuración</h1><form id="f-config" class="card form">
     <label>Nombre en el saludo<input id="c-nombre" maxlength="40" value="${esc(c.nombre)}"></label>
     <label>Tamaño de letra<select id="c-letra">${[["normal", "Normal"], ["grande", "Grande"], ["muy-grande", "Muy grande"]].map(([v, t]) => `<option value="${v}" ${c.letra === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     <div class="acciones"><button type="submit" class="btn-primario">Guardar</button></div></form>
+    <section class="card form" style="margin-top:22px" id="c-versiones"><h2>Versiones de la Biblia</h2><p class="meta">Cargando…</p></section>
     <section class="card form" style="margin-top:22px"><h2>Copia de respaldo</h2>
       <p class="meta">Último respaldo: ${c.ultimoRespaldo ? esc(new Date(c.ultimoRespaldo).toLocaleString("es")) : "nunca"}</p>
       <div class="acciones" style="justify-content:flex-start"><button type="button" class="btn-primario" id="c-compartir">Compartir copia</button>
@@ -138,16 +217,24 @@ function vistaConfig() {
 
 function pintar() {
   document.documentElement.dataset.letra = almacen.config().letra;
-  $("#vista").innerHTML = { inicio: vistaInicio, domingo: vistaDomingo, favoritos: vistaFavoritos, historial: vistaHistorial, config: vistaConfig }[vista]();
+  $("#vista").innerHTML = { inicio: vistaInicio, domingo: vistaDomingo, favoritos: vistaFavoritos, historial: vistaHistorial,
+    biblia: vistaBiblia, config: vistaConfig, lector: vistaLector }[vista]();
   document.querySelectorAll(".menu [data-ir]").forEach(b => b.classList.toggle("activa", b.dataset.ir === vista));
   if (vista === "domingo") previstaDomingo();
+  if (vista === "config") pintarVersiones();
+  if (vista === "lector") pintarLector();
 }
 
-function ir(v) {
-  if (v !== vista) history.pushState({ vista: v }, "", "#" + v);
+function ir(v, nueva = false) {
+  if (v !== vista || nueva) history.pushState({ vista: v, lectura: v === "lector" ? lectura : null }, "", "#" + v);
   vista = v; pintar(); $("#vista").scrollTop = 0;
 }
-window.addEventListener("popstate", ev => { vista = VISTAS.includes(ev.state?.vista) ? ev.state.vista : vistaDeHash(); pintar(); $("#vista").scrollTop = 0; });
+window.addEventListener("popstate", ev => {
+  const v = VISTAS.includes(ev.state?.vista) ? ev.state.vista : vistaDeHash();
+  if (v === "lector" && !ev.state?.lectura) vista = "inicio";
+  else { vista = v; if (v === "lector") lectura = ev.state.lectura; }
+  pintar(); $("#vista").scrollTop = 0;
+});
 
 function pista() {
   const q = $("#q").value, p = $("#pista"), b = $("#b-abrir");
@@ -155,7 +242,7 @@ function pista() {
   const r = parseCita(q);
   b.disabled = !r.ok;
   p.innerHTML = r.ok
-    ? `Se abrirá <b>${esc(r.etiqueta)}</b> · TLA${r.corregido ? " (ordené el rango)" : ""}${r.rangoRecortado ? " (el enlace abre el primer versículo)" : ""} <button type="button" class="estrella" data-fav="${enc(citaDe(r))}" aria-label="Guardar en favoritos">☆</button>`
+    ? `Se abrirá <b>${esc(r.etiqueta)}</b>${r.corregido ? " (ordené el rango)" : ""} <button type="button" class="estrella" data-fav="${enc(citaDe(r))}" aria-label="Guardar en favoritos">☆</button>`
     : `<span class="mal">${esc(r.error)}</span>${r.sugerencias.map(s => `<button type="button" class="sugerencia" data-sugerir="${esc(s + (r.numeros ? " " + r.numeros : ""))}">${esc(s)}</button>`).join("")}`;
 }
 
@@ -186,13 +273,19 @@ document.addEventListener("click", async ev => {
   const t = ev.target.closest("button,[data-ir]");
   if (!t) return;
   if (t.dataset.ir) return ir(t.dataset.ir);
-  if (t.hasAttribute("data-abrir-biblia")) {
-    const h = almacen.historial();
-    const codigo = h.length ? h[0].cita.codigo : "GEN.1";
-    const [libro, capitulo] = codigo.split(".");
-    const url = `https://www.bible.com/bible/176/${libro}.${capitulo}.TLA`;
-    window.open(url, "_blank", "noopener");
-    return;
+  if (t.hasAttribute("data-volver")) return history.back();
+  if (t.dataset.capitulo) { const c = dec(t.dataset.capitulo); return abrirCapitulo(c.codigo, c.cap); }
+  if (t.dataset.libro !== undefined) { libroSel = t.dataset.libro || null; pintar(); return ($("#vista").scrollTop = 0); }
+  if (t.hasAttribute("data-completo")) { lectura.completo = !lectura.completo; history.replaceState({ vista, lectura }, "", "#lector"); return pintar(); }
+  if (t.dataset.version) {
+    const y = $("#vista").scrollTop;
+    lectura.sigla = t.dataset.version; history.replaceState({ vista, lectura }, "", "#lector");
+    pintar(); await pintarLector(); $("#vista").scrollTop = y; return;
+  }
+  if (t.dataset.principal) { await biblias.hacerPrincipal(t.dataset.principal); return pintarVersiones(); }
+  if (t.dataset.quitarVersion) {
+    if (!confirm(`¿Quitar la versión ${t.dataset.quitarVersion} de esta tablet?`)) return;
+    await biblias.quitar(t.dataset.quitarVersion); aviso("Versión quitada"); return pintarVersiones();
   }
   if (t.dataset.cita) return abrir(dec(t.dataset.cita));
   if (t.dataset.fav) return pedirSerie(dec(t.dataset.fav));
@@ -241,6 +334,24 @@ document.addEventListener("submit", ev => {
 });
 
 document.addEventListener("change", async ev => {
+  if (ev.target.id === "c-biblia" && ev.target.files[0]) {
+    const inp = ev.target, archivo = inp.files[0];
+    inp.value = "";
+    try {
+      aviso("Leyendo la Biblia…", 60000);
+      const b = importarBiblia(decodificar(await archivo.arrayBuffer()));
+      if (!b.sigla) b.sigla = (prompt("¿Qué sigla le ponemos a esta versión? (por ejemplo TLA)") || "").trim().slice(0, 20);
+      if (!b.sigla) return aviso("Carga cancelada: falta la sigla");
+      const ya = (await biblias.versiones()).some(m => m.sigla === b.sigla);
+      if (ya && !confirm(`Ya hay una versión ${b.sigla}. ¿Reemplazarla por este archivo?`)) return aviso("Carga cancelada");
+      aviso("Guardando en la tablet…", 60000);
+      await biblias.guardar(b);
+      aviso(`${b.sigla}: ${b.resumen.libros} libros, ${b.resumen.versiculos.toLocaleString("es")} versículos${b.resumen.agrupados ? ` (${b.resumen.agrupados.toLocaleString("es")} agrupados)` : ""}`, 8000);
+    } catch (e) {
+      aviso(e instanceof ErrorBiblia ? e.message : "No se pudo guardar la Biblia (¿falta espacio en la tablet?). La versión anterior sigue igual.", 8000);
+    }
+    return pintarVersiones();
+  }
   if (ev.target.id !== "c-importar" || !ev.target.files[0]) return;
   const inp = ev.target;
   try {
@@ -255,7 +366,6 @@ document.addEventListener("change", async ev => {
 });
 
 $("#dlg-fav").addEventListener("close", () => { favPendiente = null; });
-window.addEventListener("offline", () => aviso("Sin internet: los pasajes se abrirán cuando vuelva el Wi-Fi."));
 navigator.storage?.persist?.().catch?.(() => {});
 history.replaceState({ vista }, "", "#" + vista);
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
