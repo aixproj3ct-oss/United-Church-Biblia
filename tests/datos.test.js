@@ -43,7 +43,7 @@ test("historial: el más reciente primero, sin repetir, máximo 30", () => {
 test("persiste entre instancias y config por defecto", () => {
   const s = memoria();
   const a = crearAlmacen(s);
-  assert.deepEqual(a.config(), { nombre: "pastor", letra: "grande", ultimoRespaldo: null });
+  assert.deepEqual(a.config(), { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro" });
   a.guardarConfig({ nombre: "Pastor Luis" });
   assert.equal(crearAlmacen(s).config().nombre, "Pastor Luis");
 });
@@ -128,14 +128,14 @@ test("config se sanea al cargar: tipos inválidos y claves desconocidas", () => 
   m.setItem("uc-biblia-v1", JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: "  ", letra: "enorme", ultimoRespaldo: 5, extra: "x" } }));
   const cfg = crearAlmacen(m).config();
-  assert.deepEqual(cfg, { nombre: "pastor", letra: "grande", ultimoRespaldo: null });
+  assert.deepEqual(cfg, { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro" });
 });
 
 test("config se sanea al importar", () => {
   const a = crearAlmacen(memoria());
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: 42, letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", otro: 1 } }));
-  assert.deepEqual(a.config(), { nombre: "pastor", letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z" });
+  assert.deepEqual(a.config(), { nombre: "pastor", letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", tema: "claro" });
 });
 
 test("crearAlmacen sin argumentos no lanza si localStorage falla o no existe", () => {
@@ -196,4 +196,15 @@ test("una cita nueva sin url es válida; un código mal formado no", () => {
   a.registrarHistorial({ codigo: "PSA.23", etiqueta: "Salmo 23" });
   a.registrarHistorial({ codigo: "Juan", etiqueta: "Juan" });
   assert.deepEqual(a.historial().map(h => h.cita.codigo), ["PSA.23"]);
+});
+
+test("tema: claro por defecto, acepta oscuro, se sanea lo inválido y se conserva al importar", () => {
+  const a = crearAlmacen(memoria());
+  assert.equal(a.config().tema, "claro");
+  a.guardarConfig({ tema: "oscuro" });
+  assert.equal(a.config().tema, "oscuro");
+  a.guardarConfig({ tema: "rosado" });
+  assert.equal(a.config().tema, "claro");
+  a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: { tema: "oscuro" } }));
+  assert.equal(a.config().tema, "oscuro");
 });

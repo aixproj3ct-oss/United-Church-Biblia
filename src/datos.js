@@ -3,15 +3,17 @@ const CLAVE = "uc-biblia-v1";
 const MAX_HISTORIAL = 30;
 
 const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [],
-  config: { nombre: "pastor", letra: "grande", ultimoRespaldo: null } });
+  config: { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro" } });
 
 const LETRAS = ["normal", "grande", "muy-grande"];
+const TEMAS = ["claro", "oscuro"];
 const sanearConfig = c => {
   const o = c && typeof c === "object" ? c : {};
   return {
     nombre: typeof o.nombre === "string" && o.nombre.trim() ? o.nombre : "pastor",
     letra: LETRAS.includes(o.letra) ? o.letra : "grande",
     ultimoRespaldo: typeof o.ultimoRespaldo === "string" ? o.ultimoRespaldo : null,
+    tema: TEMAS.includes(o.tema) ? o.tema : "claro",
   };
 };
 

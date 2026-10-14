@@ -139,10 +139,18 @@ function vistaHistorial() {
 const ordenAlternativas = (ms, actual) => ms.filter(m => m.sigla !== actual)
   .sort((a, b) => (/1960/.test(b.sigla) ? 1 : 0) - (/1960/.test(a.sigla) ? 1 : 0) || a.orden - b.orden);
 
+// Tema claro u oscuro: se elige en Configuración o con el botón ☾/☀ del lector, sin salir del pasaje.
+const botonTema = () => almacen.config().tema === "oscuro" ? "☀ Claro" : "☾ Oscuro";
+function aplicarTema() {
+  const oscuro = almacen.config().tema === "oscuro";
+  document.documentElement.dataset.tema = oscuro ? "oscuro" : "claro";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", oscuro ? "#000000" : "#0b1a4a");
+}
+
 function vistaLector() {
   return `<div class="lector"><div class="lector-cab"><button class="btn-sec" data-volver>‹ Volver</button>
     <h1>${esc(lectura.completo && lectura.ref.v1 ? etiquetaRef({ ...lectura.ref, v1: null, v2: null }) : lectura.cita.etiqueta)}</h1>
-    <span class="sigla" id="l-sigla"></span></div><div id="l-cuerpo" class="lector-cuerpo"><p class="meta">Abriendo…</p></div></div>`;
+    <button class="btn-tema" data-alternar-tema>${botonTema()}</button><span class="sigla" id="l-sigla"></span></div><div id="l-cuerpo" class="lector-cuerpo"><p class="meta">Abriendo…</p></div></div>`;
 }
 
 async function pintarLector() {
@@ -209,6 +217,7 @@ function vistaConfig() {
   return `<h1 class="titulo-vista">Configuración</h1><form id="f-config" class="card form">
     <label>Nombre en el saludo<input id="c-nombre" maxlength="40" value="${esc(c.nombre)}"></label>
     <label>Tamaño de letra<select id="c-letra">${[["normal", "Normal"], ["grande", "Grande"], ["muy-grande", "Muy grande"]].map(([v, t]) => `<option value="${v}" ${c.letra === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    <label>Tema<select id="c-tema">${[["claro", "Claro (fondo blanco)"], ["oscuro", "Oscuro (fondo negro)"]].map(([v, t]) => `<option value="${v}" ${c.tema === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     <div class="acciones"><button type="submit" class="btn-primario">Guardar</button></div></form>
     <section class="card form" style="margin-top:22px" id="c-versiones"><h2>Versiones de la Biblia</h2><p class="meta">Cargando…</p></section>
     <section class="card form" style="margin-top:22px"><h2>Copia de respaldo</h2>
@@ -221,6 +230,7 @@ function vistaConfig() {
 
 function pintar() {
   document.documentElement.dataset.letra = almacen.config().letra;
+  aplicarTema();
   $("#vista").innerHTML = { inicio: vistaInicio, domingo: vistaDomingo, favoritos: vistaFavoritos, historial: vistaHistorial,
     biblia: vistaBiblia, config: vistaConfig, lector: vistaLector }[vista]();
   document.querySelectorAll(".menu [data-ir]").forEach(b => b.classList.toggle("activa", b.dataset.ir === vista));
@@ -278,6 +288,10 @@ document.addEventListener("click", async ev => {
   if (!t) return;
   if (t.dataset.ir) return ir(t.dataset.ir);
   if (t.hasAttribute("data-volver")) return history.back();
+  if (t.hasAttribute("data-alternar-tema")) {
+    almacen.guardarConfig({ tema: almacen.config().tema === "oscuro" ? "claro" : "oscuro" });
+    aplicarTema(); t.textContent = botonTema(); return;
+  }
   if (t.dataset.capitulo) { const c = dec(t.dataset.capitulo); return abrirCapitulo(c.codigo, c.cap); }
   if (t.dataset.libro !== undefined) { libroSel = t.dataset.libro || null; pintar(); return ($("#vista").scrollTop = 0); }
   if (t.hasAttribute("data-completo")) { lectura.completo = !lectura.completo; history.replaceState({ vista, lectura }, "", "#lector"); return pintar(); }
@@ -328,7 +342,7 @@ document.addEventListener("submit", ev => {
       citas: ls.map(l => ({ ...citaDe(l.r), ...(l.titulo ? { titulo: l.titulo } : {}) })) });
     pintar(); aviso("Domingo guardado");
   }
-  if (f.id === "f-config") { almacen.guardarConfig({ nombre: $("#c-nombre").value.trim() || "pastor", letra: $("#c-letra").value }); pintar(); aviso("Guardado"); }
+  if (f.id === "f-config") { almacen.guardarConfig({ nombre: $("#c-nombre").value.trim() || "pastor", letra: $("#c-letra").value, tema: $("#c-tema").value }); pintar(); aviso("Guardado"); }
   if (f.id === "f-fav") {
     const guardar = ev.submitter?.value !== "cancelar" && favPendiente;
     if (guardar) almacen.agregarFavorito($("#fav-nueva").value, favPendiente);

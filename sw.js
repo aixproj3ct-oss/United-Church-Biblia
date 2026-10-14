@@ -1,5 +1,5 @@
 // Guarda la app para que abra al instante; cada vez que hay conexión trae la versión nueva para la próxima apertura.
-const VERSION = "uc-v6";
+const VERSION = "uc-v7";
 const ARCHIVOS = ["./", "index.html", "styles.css", "app.js", "src/citas.js", "src/libros.js", "src/datos.js",
   "src/importar.js", "src/pasaje.js", "src/biblias.js", "src/lectura.js",
   "manifest.webmanifest", "assets/icono-192.png", "assets/icono-512.png", "assets/icono-maskable-512.png"];
