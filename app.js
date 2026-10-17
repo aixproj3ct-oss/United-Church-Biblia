@@ -6,6 +6,8 @@ import { decodificar, importarBiblia, ErrorBiblia } from "./src/importar.js";
 import { armarPasaje, refDeCodigo, etiquetaRef, codigoRef, capituloVecino, ordenAlternativas } from "./src/pasaje.js";
 import { LIBROS } from "./src/libros.js";
 import { nuevaLectura } from "./src/lectura.js";
+import { crearCanal } from "./src/proyeccion/canal.js";
+import { temaDe, normalizarCodigo, msgPasaje, msgParte, msgEspera } from "./src/proyeccion/mensajes.js";
 
 const almacen = crearAlmacen();
 const biblias = crearBiblias();
@@ -42,9 +44,50 @@ const fechaLarga = iso => new Date(iso + "T12:00").toLocaleDateString("es", { we
 
 function aviso(msg, ms = 3500) { const a = $("#aviso"); a.textContent = msg; a.hidden = false; clearTimeout(aviso.t); aviso.t = setTimeout(() => (a.hidden = true), ms); }
 
+// Pantalla de proyección: lo que el pastor tiene en la pantalla del templo. "seguir" reenvía los cambios
+// del pasaje proyectado (capítulo, versión, capítulo completo); una cita nueva no sale hasta pulsar Proyectar.
+const proy = { activo: false, seguir: false, enviado: null, codigo: null, partes: 1, parte: 0, esperando: null };
+let canalProy = null, cerrarProy = null;
+
+function conectarPantalla() {
+  cerrarProy?.(); cerrarProy = canalProy = null;
+  const codigo = almacen.config().pantalla;
+  if (!codigo) return;
+  canalProy = crearCanal(temaDe(codigo));
+  cerrarProy = canalProy.escuchar(m => {
+    if (m.de !== "pantalla" || m.tipo !== "estado" || m.codigo !== proy.codigo) return;
+    Object.assign(proy, { partes: m.partes, parte: m.parte, esperando: null });
+    pintarBarra();
+  });
+}
+
+const claveLectura = sigla => `${lectura.cita.codigo}|${sigla}|${lectura.completo}`;
+
+async function enviarPasaje(sigla) {
+  const m = msgPasaje({ codigo: lectura.cita.codigo, sigla, completo: lectura.completo, parte: 0 });
+  try { await canalProy.publicar(m); }
+  catch { aviso("Sin conexión: no se pudo enviar a la pantalla", 6000); return; }
+  Object.assign(proy, { activo: true, enviado: claveLectura(sigla), codigo: m.codigo, partes: 1, parte: 0, esperando: Date.now() });
+  setTimeout(pintarBarra, 5200);
+}
+
+function pintarBarra() {
+  const b = $("#l-barra");
+  if (!b) return;
+  b.hidden = !proy.activo;
+  if (!proy.activo) return;
+  const sinRespuesta = proy.esperando && Date.now() - proy.esperando > 5000;
+  b.innerHTML = `<b>📺 En pantalla</b>
+    <button class="btn-sec" data-parte="-1" ${proy.parte <= 0 ? "disabled" : ""}>◀ Parte</button>
+    <span>${sinRespuesta ? "Pantalla sin respuesta" : `${proy.parte + 1}/${proy.partes}`}</span>
+    <button class="btn-sec" data-parte="1" ${proy.parte >= proy.partes - 1 ? "disabled" : ""}>Parte ▶</button>
+    <button class="btn-peligro" data-quitar-pantalla>Quitar de pantalla</button>`;
+}
+
 function abrir(cita, completo = false, navegando = false) {
   const ref = refDeCodigo(cita.codigo);
   if (!ref) return aviso("No pude abrir esa cita");
+  if (!navegando) proy.seguir = false;
   almacen.registrarHistorial({ codigo: cita.codigo, etiqueta: cita.etiqueta });
   const r = nuevaLectura(lectura, { codigo: cita.codigo, etiqueta: cita.etiqueta }, ref, { completo, navegando });
   lectura = r.lectura;
@@ -147,7 +190,7 @@ function aplicarTema() {
 function vistaLector() {
   return `<div class="lector"><div class="lector-cab"><button class="btn-sec" data-volver>‹ Volver</button>
     <h1>${esc(lectura.completo && lectura.ref.v1 ? etiquetaRef({ ...lectura.ref, v1: null, v2: null }) : lectura.cita.etiqueta)}</h1>
-    <button class="btn-tema" data-alternar-tema>${botonTema()}</button><span class="sigla" id="l-sigla"></span></div><div id="l-cuerpo" class="lector-cuerpo"><p class="meta">Abriendo…</p></div></div>`;
+    <button class="btn-tema" data-alternar-tema>${botonTema()}</button><span id="l-proy"></span><span class="sigla" id="l-sigla"></span></div><div id="l-cuerpo" class="lector-cuerpo"><p class="meta">Abriendo…</p></div></div>`;
 }
 
 async function pintarLector() {
@@ -168,11 +211,14 @@ async function pintarLector() {
     desde: lectura.completo ? null : v1, hasta: lectura.completo ? null : (v2 ?? v1) });
   if (!cuerpo.isConnected) return;
   $("#l-sigla").textContent = actual;
+  if (proy.activo && proy.seguir && canalProy && claveLectura(actual) !== proy.enviado) enviarPasaje(actual).then(() => pintarLector());
+  const enPantalla = proy.activo && proy.enviado === claveLectura(actual);
+  $("#l-proy").innerHTML = almacen.config().pantalla ? `<button class="btn-tema btn-proyectar ${enPantalla ? "sel" : ""}" data-proyectar>${enPantalla ? "📺 En pantalla" : "📺 Proyectar"}</button>` : "";
   const antes = capituloVecino(codigo, cap, -1), despues = capituloVecino(codigo, cap, 1);
   const textoHTML = r.bloques.map(b => `<span class="vers${b.sigla ? " relleno" : ""}"><b class="num">${esc(b.etiqueta)}</b>${esc(b.texto)}${b.sigla ? ` <small class="de">${esc(b.sigla)}</small>` : ""}</span>`).join(" ");
   const avisoRelleno = r.rellenoDe.length ? `<p class="aviso-relleno">Este pasaje no está en tu archivo ${esc(actual)}; se muestra en ${esc(r.rellenoDe.join(" y "))}</p>` : "";
   const sinTexto = r.vacio ? `<p class="meta">Este capítulo no está en las Biblias cargadas.</p>` : r.sinTexto.length ?`<p class="meta">${r.bloques.length ? `Versículo${r.sinTexto.length > 1 ? "s" : ""} ${esc(r.sinTexto.join(", "))}: ` : ""}Este versículo no está en las Biblias cargadas.</p>` : "";
-  cuerpo.innerHTML = `${avisoRelleno}<p class="texto-biblia" lang="es">${textoHTML}</p>${sinTexto}
+  cuerpo.innerHTML = `<div id="l-barra" class="barra-proyeccion" hidden></div>${avisoRelleno}<p class="texto-biblia" lang="es">${textoHTML}</p>${sinTexto}
     <div class="lector-pie">
       <button class="btn-sec" ${antes ? `data-capitulo="${enc(antes)}"` : "disabled"}>◀ Capítulo anterior</button>
       ${v1 ? `<button class="btn-sec" data-completo>${lectura.completo ? "Ver solo el pasaje" : "Ver capítulo completo"}</button>` : ""}
@@ -180,6 +226,7 @@ async function pintarLector() {
       <button class="estrella" data-fav="${enc(lectura.cita)}" aria-label="Guardar en favoritos">☆</button>
       <button class="btn-sec" ${despues ? `data-capitulo="${enc(despues)}"` : "disabled"}>Capítulo siguiente ▶</button>
     </div>`;
+  pintarBarra();
 }
 
 function vistaBiblia() {
@@ -216,6 +263,11 @@ function vistaConfig() {
     <label>Tamaño de letra<select id="c-letra">${[["normal", "Normal"], ["grande", "Grande"], ["muy-grande", "Muy grande"]].map(([v, t]) => `<option value="${v}" ${c.letra === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     <label>Tema<select id="c-tema">${[["claro", "Claro (fondo blanco)"], ["oscuro", "Oscuro (fondo negro)"]].map(([v, t]) => `<option value="${v}" ${c.tema === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     <div class="acciones"><button type="submit" class="btn-primario">Guardar</button></div></form>
+    <section class="card form" style="margin-top:22px"><h2>Pantalla de proyección</h2>
+      ${c.pantalla ? `<p class="meta">Conectada a la pantalla <b>${esc(c.pantalla)}</b>. En el lector aparece el botón 📺 Proyectar.</p>
+        <div class="acciones" style="justify-content:flex-start"><button type="button" class="btn-sec" id="c-desconectar">Desconectar</button></div>`
+      : `<form id="f-pantalla" class="form"><label>Código que muestra la pantalla de la iglesia (tecla F2)<input id="c-pantalla" placeholder="UC-XXXX-XXXX" autocomplete="off" autocapitalize="characters" maxlength="20"></label>
+        <div class="acciones" style="justify-content:flex-start"><button class="btn-primario">Conectar</button></div></form>`}</section>
     <section class="card form" style="margin-top:22px" id="c-versiones"><h2>Versiones de la Biblia</h2><p class="meta">Cargando…</p></section>
     <section class="card form" style="margin-top:22px"><h2>Copia de respaldo</h2>
       <p class="meta">Último respaldo: ${c.ultimoRespaldo ? esc(new Date(c.ultimoRespaldo).toLocaleString("es")) : "nunca"}</p>
@@ -285,6 +337,24 @@ document.addEventListener("click", async ev => {
   if (!t) return;
   if (t.dataset.ir) return ir(t.dataset.ir);
   if (t.hasAttribute("data-volver")) return history.back();
+  if (t.hasAttribute("data-proyectar")) {
+    if (proy.activo && proy.enviado === claveLectura($("#l-sigla").textContent)) return;
+    proy.seguir = true; await enviarPasaje($("#l-sigla").textContent); return pintarLector();
+  }
+  if (t.dataset.parte && canalProy) {
+    const n = proy.parte + Number(t.dataset.parte);
+    if (n < 0 || n >= proy.partes) return;
+    try { await canalProy.publicar(msgParte(n)); } catch { return aviso("Sin conexión: no se pudo enviar a la pantalla", 6000); }
+    Object.assign(proy, { parte: n, esperando: Date.now() }); setTimeout(pintarBarra, 5200); return pintarBarra();
+  }
+  if (t.hasAttribute("data-quitar-pantalla") && canalProy) {
+    try { await canalProy.publicar(msgEspera()); } catch { return aviso("Sin conexión: no se pudo enviar a la pantalla", 6000); }
+    Object.assign(proy, { activo: false, seguir: false, enviado: null }); return pintarLector();
+  }
+  if (t.id === "c-desconectar") {
+    almacen.guardarConfig({ pantalla: null }); Object.assign(proy, { activo: false, seguir: false, enviado: null });
+    conectarPantalla(); pintar(); return aviso("Pantalla desconectada");
+  }
   if (t.hasAttribute("data-alternar-tema")) {
     almacen.guardarConfig({ tema: almacen.config().tema === "oscuro" ? "claro" : "oscuro" });
     aplicarTema(); t.textContent = botonTema(); return;
@@ -339,6 +409,11 @@ document.addEventListener("submit", ev => {
       citas: ls.map(l => ({ ...citaDe(l.r), ...(l.titulo ? { titulo: l.titulo } : {}) })) });
     pintar(); aviso("Domingo guardado");
   }
+  if (f.id === "f-pantalla") {
+    const codigo = normalizarCodigo($("#c-pantalla").value);
+    if (!codigo) return aviso("Ese código no es válido. Cópialo de la pantalla (tecla F2), por ejemplo UC-7K4P-9QX2.", 6000);
+    almacen.guardarConfig({ pantalla: codigo }); conectarPantalla(); pintar(); return aviso("Pantalla conectada");
+  }
   if (f.id === "f-config") { almacen.guardarConfig({ nombre: $("#c-nombre").value.trim() || "pastor", letra: $("#c-letra").value, tema: $("#c-tema").value }); pintar(); aviso("Guardado"); }
   if (f.id === "f-fav") {
     const guardar = ev.submitter?.value !== "cancelar" && favPendiente;
@@ -384,4 +459,5 @@ $("#dlg-fav").addEventListener("close", () => { favPendiente = null; });
 navigator.storage?.persist?.().catch?.(() => {});
 history.replaceState({ vista }, "", "#" + vista);
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+conectarPantalla();
 pintar();

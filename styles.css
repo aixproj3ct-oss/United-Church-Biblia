@@ -127,3 +127,9 @@ html[data-tema="oscuro"] .texto-biblia .relleno{background:#2a2410}
 html[data-tema="oscuro"] .aviso-relleno{background:#2a2410;border-color:#5c4a12;color:#f5dc8a}
 html[data-tema="oscuro"] .aviso{background:#e5e7eb;color:#000}
 html[data-tema="oscuro"] .pista b{color:#93b4ff}
+.barra-proyeccion{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:4px 0 12px;padding:8px 12px;border-radius:14px;background:#e8eefc;border:1px solid #c9d6f7;font-size:14px}
+.barra-proyeccion[hidden]{display:none}
+.barra-proyeccion button{font-size:14px;min-height:40px;padding:0 10px;border-radius:10px}
+.barra-proyeccion button[disabled]{opacity:.4}
+.btn-proyectar.sel{background:var(--azul);color:#fff;border-color:var(--azul)}
+html[data-tema="oscuro"] .barra-proyeccion{background:#16213f;border-color:#2a3a66;color:var(--tinta)}
