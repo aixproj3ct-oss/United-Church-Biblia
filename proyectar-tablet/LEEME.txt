@@ -20,5 +20,6 @@ IMPORTANTE
 - No minimices la ventana "Proyección United Church". Puede quedar detrás de EasyWorship.
 - No la maximices ni le cambies el tamaño. Si lo hiciste, vuelve a abrir "Proyectar tablet" y se acomoda sola.
 - La tablet y esta PC necesitan internet (no hace falta que estén en el mismo Wi-Fi).
+- El panel (F2) se ve en la cámara mientras está abierto: úsalo antes del culto o con el Live Video fuera de pantalla.
 - Teclas en la ventana: F2 panel · flechas izquierda/derecha cambian de parte · Esc pantalla de espera.
 - Si se va internet, la pantalla se queda con el último pasaje y se reconecta sola.

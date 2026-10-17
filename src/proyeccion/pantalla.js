@@ -132,7 +132,7 @@ function alternarPanel() { const p = $("#panel"); p.hidden = !p.hidden; pintarPa
 document.addEventListener("click", async ev => {
   const t = ev.target.closest("button");
   if (!t) return;
-  if (t.id === "engrane" || t.dataset.accion === "cerrar") return alternarPanel();
+  if (t.dataset.accion === "cerrar") return alternarPanel();
   if (t.dataset.accion === "espera") { actual = null; return mostrarEspera(); }
   if (t.dataset.accion === "nuevo-codigo") {
     if (!confirm("Con un código nuevo habrá que volver a escribirlo en la tablet. ¿Continuar?")) return;
@@ -171,13 +171,6 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "ArrowRight" && actual) irAParte(actual.parte + 1);
   if (ev.key === "ArrowLeft" && actual) irAParte(actual.parte - 1);
   if (ev.key === "Escape") { actual = null; mostrarEspera(); }
-});
-
-let ocultarEngrane;
-document.addEventListener("mousemove", () => {
-  $("#engrane").classList.add("visible");
-  clearTimeout(ocultarEngrane);
-  ocultarEngrane = setTimeout(() => $("#engrane").classList.remove("visible"), 3000);
 });
 
 addEventListener("resize", escalar);

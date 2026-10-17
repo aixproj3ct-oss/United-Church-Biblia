@@ -17,9 +17,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Monts
 .espera{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px}
 .espera img{width:260px;height:260px;border-radius:50%;box-shadow:0 10px 50px rgba(0,0,0,.6)}
 .espera .ref{font-size:60px;margin:0}
-/* Controles del operador: fuera del escenario, no salen en la lámina */
-.engrane{position:fixed;right:14px;bottom:14px;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.55);color:#fff;font-size:22px;cursor:pointer;opacity:0;transition:opacity .3s}
-.engrane.visible{opacity:1}
+/* Panel del operador (F2). OBS captura toda la ventana: el panel se ve en la cámara mientras está abierto. */
 .panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,90vw);overflow:auto;background:#10141c;color:#e8edf5;padding:20px 22px;box-shadow:-10px 0 40px rgba(0,0,0,.6);font-size:15px;z-index:5}
 .panel h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#9aa6b8;margin:22px 0 8px}
 .panel .codigo{font:600 30px/1.2 Montserrat,sans-serif;letter-spacing:.06em;color:var(--ambar)}
