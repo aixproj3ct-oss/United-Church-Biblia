@@ -14,8 +14,12 @@ public class Ventana {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out R r);
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr z, int x, int y, int cx, int cy, uint f);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+  [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr c);
 }
 "@
+# Medir en píxeles reales en cualquier monitor (si no, Windows escala las coordenadas y el recorte sale mal).
+[Ventana]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
 function Aviso($t) { [System.Windows.MessageBox]::Show($t, "Proyectar tablet") | Out-Null }
 function Buscar { Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq $titulo } | Select-Object -First 1 }
 function Marco($h) { $r = New-Object Ventana+R; [Ventana]::DwmGetWindowAttribute($h, 9, [ref]$r, 16) | Out-Null; $r }
@@ -36,7 +40,9 @@ if (-not $p) {
   if (-not $p) { Aviso "No se abrió la ventana de proyección."; exit 1 }
 }
 $h = $p.MainWindowHandle
-[Ventana]::ShowWindow($h, 9) | Out-Null   # restaurar si estaba minimizada (OBS no captura ventanas minimizadas)
+# Restaurar si estaba minimizada (OBS no captura ventanas minimizadas) o maximizada (el contenido debe quedar en 16:9).
+[Ventana]::ShowWindow($h, 9) | Out-Null
+if ([Ventana]::IsZoomed($h)) { [Ventana]::ShowWindow($h, 9) | Out-Null }
 Start-Sleep -Milliseconds 800
 
 # Ajusta el alto para que el contenido quede en 16:9 y calcula el recorte.

@@ -34,7 +34,7 @@ const htmlBloques = bs => bs.map(b => `<span class="vers${b.sigla ? " relleno" :
 
 // ¿Caben estos bloques a este tamaño en la caja, dejando lugar para la referencia y el pie?
 function cabe(bloques, tam) {
-  const disponible = 1080 - 2 * 110 - $("#ref").offsetHeight - 18 - $("#pie").offsetHeight - 30;
+  const disponible = 1080 - 2 * 80 - $("#ref").offsetHeight - 18 - $("#pie").offsetHeight - 30;
   const m = $("#medida");
   m.style.fontSize = tam + "px";
   m.innerHTML = htmlBloques(bloques);

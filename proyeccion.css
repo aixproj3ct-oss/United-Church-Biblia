@@ -4,7 +4,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Monts
 .escenario{position:absolute;left:50%;top:50%;width:1920px;height:1080px;overflow:hidden;transform:translate(-50%,-50%) scale(var(--s));color:var(--blanco)}
 .foto{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .velo{position:absolute;inset:0;background:linear-gradient(90deg,rgba(14,30,48,.82),rgba(14,30,48,.55) 52%,transparent 78%)}
-.caja{position:absolute;top:110px;bottom:110px;left:150px;width:1000px;display:flex;flex-direction:column;justify-content:center}
+.caja{position:absolute;top:80px;bottom:80px;left:150px;width:1000px;display:flex;flex-direction:column;justify-content:center}
 .caja[hidden],.espera[hidden]{display:none}
 .ref{font-family:"Playfair Display",serif;font-style:italic;font-weight:500;font-size:74px;line-height:1.1;color:var(--ambar);margin-bottom:18px;
   text-shadow:0 0 36px rgba(255,150,40,.65),0 0 10px rgba(255,170,70,.35),0 2px 4px rgba(0,0,0,.6)}
