@@ -143,3 +143,5 @@ button.hay-mas{background:#f59e0b;border-color:#f59e0b;color:#1f1300;font-weight
 @keyframes latido{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.55)}50%{box-shadow:0 0 0 7px rgba(245,158,11,0)}}
 html[data-tema="oscuro"] button.hay-mas{background:#f59e0b;color:#1f1300;border-color:#f59e0b}
 
+/* "Quitar de pantalla" al extremo derecho, lejos de los botones de partes, para no tocarlo por error. */
+.barra-proyeccion [data-quitar-pantalla]{margin-left:auto}
