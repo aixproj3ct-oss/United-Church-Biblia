@@ -1,0 +1,23 @@
+﻿PROYECTAR TABLET — pantalla del pastor en EasyWorship
+=====================================================
+
+UNA SOLA VEZ (instalación)
+1. Clic derecho en "instalar.ps1" -> "Ejecutar con PowerShell".
+   Si Windows pide permiso para instalar OBS Studio, acéptalo.
+2. Abre el acceso directo "Proyectar tablet" del escritorio.
+3. En la ventana "Proyección United Church" pulsa F2 (panel del operador):
+   - Cargar archivo: carga TLA.xml y luego RVR1960.xml (la TLA queda como principal).
+   - Anota el CÓDIGO DE CONEXIÓN (por ejemplo UC-7K4P-9QX2).
+4. En la tablet del pastor: Configuración -> Pantalla de proyección -> escribe el código -> Conectar.
+5. En EasyWorship: agrega un Live Video y elige la cámara "OBS Virtual Camera".
+
+CADA DOMINGO
+1. Doble clic en "Proyectar tablet" (abre la ventana y la cámara de OBS).
+2. El pastor pulsa "Proyectar" en el lector de la tablet.
+3. Tú decides en EasyWorship cuándo se ve el Live Video en las pantallas.
+
+IMPORTANTE
+- No minimices la ventana "Proyección United Church". Puede quedar detrás de EasyWorship.
+- La tablet y esta PC necesitan internet (no hace falta que estén en el mismo Wi-Fi).
+- Teclas en la ventana: F2 panel · flechas izquierda/derecha cambian de parte · Esc pantalla de espera.
+- Si se va internet, la pantalla se queda con el último pasaje y se reconecta sola.
