@@ -5,7 +5,7 @@ import { crearBiblias } from "./src/biblias.js";
 import { decodificar, importarBiblia, ErrorBiblia } from "./src/importar.js";
 import { armarPasaje, refDeCodigo, etiquetaRef, codigoRef, capituloVecino, ordenAlternativas } from "./src/pasaje.js";
 import { LIBROS } from "./src/libros.js";
-import { nuevaLectura } from "./src/lectura.js";
+import { nuevaLectura, seguirProyeccion } from "./src/lectura.js";
 import { crearCanal } from "./src/proyeccion/canal.js";
 import { temaDe, normalizarCodigo, msgPasaje, msgParte, msgEspera } from "./src/proyeccion/mensajes.js";
 
@@ -80,16 +80,29 @@ function pintarBarra() {
   b.innerHTML = `<b>📺 En pantalla</b>
     <button class="btn-sec" data-parte="-1" ${proy.parte <= 0 ? "disabled" : ""}>◀ Parte</button>
     <span>${sinRespuesta ? "Pantalla sin respuesta" : `${proy.parte + 1}/${proy.partes}`}</span>
-    <button class="btn-sec" data-parte="1" ${proy.parte >= proy.partes - 1 ? "disabled" : ""}>Parte ▶</button>
+    <button class="btn-sec ${proy.parte < proy.partes - 1 ? "hay-mas" : ""}" data-parte="1" ${proy.parte >= proy.partes - 1 ? "disabled" : ""}>Parte ▶</button>
     <button class="btn-peligro" data-quitar-pantalla>Quitar de pantalla</button>`;
 }
 
-function abrir(cita, completo = false, navegando = false) {
+// `domingo` ({id, i}): la cita viene de la lista del domingo; si ya se está proyectando, sale sola en la pantalla.
+// Franja para recorrer el plan del domingo sin volver a la lista (solo si el pasaje viene de allí).
+function franjaDomingo() {
+  const dom = lectura?.domingo;
+  const d = dom && almacen.domingos().find(x => x.id === dom.id);
+  if (!d || !d.citas[dom.i]) return "";
+  const n = d.citas.length, ant = dom.i > 0, sig = dom.i < n - 1;
+  return `<div class="franja-domingo">
+    <button class="btn-sec" ${ant ? `data-dom-paso="-1"` : "disabled"}>◀ Anterior</button>
+    <span><b>${dom.i + 1} de ${n}</b> · ${esc(d.citas[dom.i].etiqueta)}${sig ? ` <small>· sigue ${esc(d.citas[dom.i + 1].etiqueta)}</small>` : ""}</span>
+    <button class="btn-sec ${sig ? "hay-mas" : ""}" ${sig ? `data-dom-paso="1"` : "disabled"}>Siguiente ▶</button></div>`;
+}
+
+function abrir(cita, completo = false, navegando = false, domingo = null) {
   const ref = refDeCodigo(cita.codigo);
   if (!ref) return aviso("No pude abrir esa cita");
-  if (!navegando) proy.seguir = false;
+  proy.seguir = seguirProyeccion(proy, { navegando, domingo });
   almacen.registrarHistorial({ codigo: cita.codigo, etiqueta: cita.etiqueta });
-  const r = nuevaLectura(lectura, { codigo: cita.codigo, etiqueta: cita.etiqueta }, ref, { completo, navegando });
+  const r = nuevaLectura(lectura, { codigo: cita.codigo, etiqueta: cita.etiqueta }, ref, { completo, navegando, domingo });
   lectura = r.lectura;
   if (!r.reemplazar) return ir("lector", true);
   history.replaceState({ vista: "lector", lectura }, "", "#lector");
@@ -101,8 +114,8 @@ function abrirCapitulo(codigo, cap) {
   abrir({ codigo: codigoRef(ref), etiqueta: etiquetaRef(ref) }, true, vista === "lector");
 }
 
-function itemCita(c, i) {
-  return `<li><button class="cita-btn" data-cita="${enc(c)}"><span class="n">${i + 1}</span><span><b>${esc(c.etiqueta)}</b>${c.titulo ? `<small>${esc(c.titulo)}</small>` : ""}</span><span class="chev">›</span></button></li>`;
+function itemCita(c, i, idDomingo) {
+  return `<li><button class="cita-btn" data-cita="${enc(c)}" data-domingo-i="${enc({ id: idDomingo, i })}"><span class="n">${i + 1}</span><span><b>${esc(c.etiqueta)}</b>${c.titulo ? `<small>${esc(c.titulo)}</small>` : ""}</span><span class="chev">›</span></button></li>`;
 }
 
 function itemHistorial(h) {
@@ -116,7 +129,7 @@ function tarjetaDomingo(d) {
   if (!d) return `<h2>Pasajes del domingo</h2><h3>Aún no hay un domingo preparado</h3><p class="meta">Anota las citas del sermón y aquí aparecerán como botones.</p><button class="btn-primario" data-ir="domingo">Preparar el domingo</button>`;
   return `<h2>Pasajes del domingo</h2><h3>${esc(d.titulo || "Sin título")}</h3>
     <div class="meta">📅 ${esc(fechaLarga(d.fecha))} · ${d.citas.length} cita${d.citas.length === 1 ? "" : "s"}</div>
-    <ol class="citas">${d.citas.map(itemCita).join("")}</ol>`;
+    <ol class="citas">${d.citas.map((c, i) => itemCita(c, i, d.id)).join("")}</ol>`;
 }
 
 function recordatorioRespaldo() {
@@ -219,6 +232,7 @@ async function pintarLector() {
   const avisoRelleno = r.rellenoDe.length ? `<p class="aviso-relleno">Este pasaje no está en tu archivo ${esc(actual)}; se muestra en ${esc(r.rellenoDe.join(" y "))}</p>` : "";
   const sinTexto = r.vacio ? `<p class="meta">Este capítulo no está en las Biblias cargadas.</p>` : r.sinTexto.length ?`<p class="meta">${r.bloques.length ? `Versículo${r.sinTexto.length > 1 ? "s" : ""} ${esc(r.sinTexto.join(", "))}: ` : ""}Este versículo no está en las Biblias cargadas.</p>` : "";
   cuerpo.innerHTML = `<div id="l-barra" class="barra-proyeccion" hidden></div>${avisoRelleno}<p class="texto-biblia" lang="es">${textoHTML}</p>${sinTexto}
+    ${franjaDomingo()}
     <div class="lector-pie">
       <button class="btn-sec" ${antes ? `data-capitulo="${enc(antes)}"` : "disabled"}>◀ Capítulo anterior</button>
       ${v1 ? `<button class="btn-sec" data-completo>${lectura.completo ? "Ver solo el pasaje" : "Ver capítulo completo"}</button>` : ""}
@@ -372,7 +386,12 @@ document.addEventListener("click", async ev => {
     if (!confirm(`¿Quitar la versión ${t.dataset.quitarVersion} de esta tablet?`)) return;
     await biblias.quitar(t.dataset.quitarVersion); aviso("Versión quitada"); return pintarVersiones();
   }
-  if (t.dataset.cita) return abrir(dec(t.dataset.cita));
+  if (t.dataset.domPaso) {
+    const dom = lectura?.domingo, d = dom && almacen.domingos().find(x => x.id === dom.id), i = dom ? dom.i + Number(t.dataset.domPaso) : -1;
+    if (d?.citas[i]) return abrir(d.citas[i], false, false, { id: d.id, i });
+    return;
+  }
+  if (t.dataset.cita) return abrir(dec(t.dataset.cita), false, false, t.dataset.domingoI ? dec(t.dataset.domingoI) : null);
   if (t.dataset.fav) return pedirSerie(dec(t.dataset.fav));
   if (t.dataset.quitar) { almacen.quitarFavorito(t.dataset.quitar); return pintar(); }
   if (t.dataset.sugerir !== undefined) { $("#q").value = t.dataset.sugerir; pista(); return $("#q").focus(); }

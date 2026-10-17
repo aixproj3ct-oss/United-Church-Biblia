@@ -1,5 +1,5 @@
 // Guarda la app para que abra al instante; cada vez que hay conexión trae la versión nueva para la próxima apertura.
-const VERSION = "uc-v12";
+const VERSION = "uc-v13";
 const ARCHIVOS = ["./", "index.html", "styles.css", "app.js", "src/citas.js", "src/libros.js", "src/datos.js",
   "src/importar.js", "src/pasaje.js", "src/biblias.js", "src/lectura.js",
   "src/proyeccion/mensajes.js", "src/proyeccion/canal.js", "src/proyeccion/partes.js", "src/proyeccion/pantalla.js",
