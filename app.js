@@ -3,7 +3,7 @@ import { parseCita, ordenBiblico } from "./src/citas.js";
 import { crearAlmacen } from "./src/datos.js";
 import { crearBiblias } from "./src/biblias.js";
 import { decodificar, importarBiblia, ErrorBiblia } from "./src/importar.js";
-import { armarPasaje, refDeCodigo, etiquetaRef, codigoRef, capituloVecino } from "./src/pasaje.js";
+import { armarPasaje, refDeCodigo, etiquetaRef, codigoRef, capituloVecino, ordenAlternativas } from "./src/pasaje.js";
 import { LIBROS } from "./src/libros.js";
 import { nuevaLectura } from "./src/lectura.js";
 
@@ -135,9 +135,6 @@ function vistaHistorial() {
   return `<h1 class="titulo-vista">Historial</h1><section class="card">${h.length ? `<ul class="lista">${h.map(itemHistorial).join("")}</ul>` : `<p class="vacio">Todavía no abriste ningún pasaje.</p>`}</section>`;
 }
 
-// Orden de relleno: primero la RV 1960 si está cargada, luego las demás en orden de carga.
-const ordenAlternativas = (ms, actual) => ms.filter(m => m.sigla !== actual)
-  .sort((a, b) => (/1960/.test(b.sigla) ? 1 : 0) - (/1960/.test(a.sigla) ? 1 : 0) || a.orden - b.orden);
 
 // Tema claro u oscuro: se elige en Configuración o con el botón ☾/☀ del lector, sin salir del pasaje.
 const botonTema = () => almacen.config().tema === "oscuro" ? "☀ Claro" : "☾ Oscuro";

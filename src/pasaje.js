@@ -65,3 +65,7 @@ export function armarPasaje({ principal, alternativas = [], desde = null, hasta 
     vacio: desde === null && maximo === 0,
   };
 }
+
+// Orden de relleno: primero la RV 1960 si está cargada, luego las demás en orden de carga.
+export const ordenAlternativas = (ms, actual) => ms.filter(m => m.sigla !== actual)
+  .sort((a, b) => (/1960/.test(b.sigla) ? 1 : 0) - (/1960/.test(a.sigla) ? 1 : 0) || a.orden - b.orden);

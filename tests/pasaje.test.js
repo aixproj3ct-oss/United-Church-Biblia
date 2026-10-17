@@ -87,3 +87,9 @@ test("capítulo que no tiene ninguna versión cargada: marca vacio (nunca pantal
   assert.equal(r.vacio, true);
   assert.equal(p(null, null).vacio, false);
 });
+
+test("ordenAlternativas pone la RV 1960 primero", async () => {
+  const { ordenAlternativas } = await import("../src/pasaje.js");
+  const ms = [{ sigla: "TLA", orden: 1 }, { sigla: "NVI", orden: 2 }, { sigla: "RVR 1960", orden: 3 }];
+  assert.deepEqual(ordenAlternativas(ms, "TLA").map(m => m.sigla), ["RVR 1960", "NVI"]);
+});
