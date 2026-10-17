@@ -43,7 +43,7 @@ test("historial: el más reciente primero, sin repetir, máximo 30", () => {
 test("persiste entre instancias y config por defecto", () => {
   const s = memoria();
   const a = crearAlmacen(s);
-  assert.deepEqual(a.config(), { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro" });
+  assert.deepEqual(a.config(), { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null });
   a.guardarConfig({ nombre: "Pastor Luis" });
   assert.equal(crearAlmacen(s).config().nombre, "Pastor Luis");
 });
@@ -128,14 +128,14 @@ test("config se sanea al cargar: tipos inválidos y claves desconocidas", () => 
   m.setItem("uc-biblia-v1", JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: "  ", letra: "enorme", ultimoRespaldo: 5, extra: "x" } }));
   const cfg = crearAlmacen(m).config();
-  assert.deepEqual(cfg, { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro" });
+  assert.deepEqual(cfg, { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null });
 });
 
 test("config se sanea al importar", () => {
   const a = crearAlmacen(memoria());
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: 42, letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", otro: 1 } }));
-  assert.deepEqual(a.config(), { nombre: "pastor", letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", tema: "claro" });
+  assert.deepEqual(a.config(), { nombre: "pastor", letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", tema: "claro", pantalla: null });
 });
 
 test("crearAlmacen sin argumentos no lanza si localStorage falla o no existe", () => {
@@ -207,4 +207,14 @@ test("tema: claro por defecto, acepta oscuro, se sanea lo inválido y se conserv
   assert.equal(a.config().tema, "claro");
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: { tema: "oscuro" } }));
   assert.equal(a.config().tema, "oscuro");
+});
+
+test("pantalla: normaliza el código, rechaza lo inválido y viaja en la copia", () => {
+  const a = crearAlmacen(memoria());
+  a.guardarConfig({ pantalla: "uc-7k4p-9qx2" });
+  assert.equal(a.config().pantalla, "UC-7K4P-9QX2");
+  a.guardarConfig({ pantalla: "xx" });
+  assert.equal(a.config().pantalla, null);
+  a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: { pantalla: "UC-7K4P-9QX2" } }));
+  assert.equal(a.config().pantalla, "UC-7K4P-9QX2");
 });

@@ -1,9 +1,10 @@
 // Datos del pastor guardados solo en la tablet (localStorage). Nada sale del dispositivo.
+import { normalizarCodigo } from "./proyeccion/mensajes.js";
 const CLAVE = "uc-biblia-v1";
 const MAX_HISTORIAL = 30;
 
 const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [],
-  config: { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro" } });
+  config: { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null } });
 
 const LETRAS = ["normal", "grande", "muy-grande"];
 const TEMAS = ["claro", "oscuro"];
@@ -14,6 +15,7 @@ const sanearConfig = c => {
     letra: LETRAS.includes(o.letra) ? o.letra : "grande",
     ultimoRespaldo: typeof o.ultimoRespaldo === "string" ? o.ultimoRespaldo : null,
     tema: TEMAS.includes(o.tema) ? o.tema : "claro",
+    pantalla: normalizarCodigo(o.pantalla),
   };
 };
 
