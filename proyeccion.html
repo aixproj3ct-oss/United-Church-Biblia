@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000000">
+  <title>Proyección United Church</title>
+  <link rel="icon" href="assets/icono-192.png">
+  <link rel="stylesheet" href="assets/proyeccion/fuentes.css">
+  <link rel="stylesheet" href="proyeccion.css">
+</head>
+<body>
+  <div class="escenario" id="escenario">
+    <img id="foto" class="foto" alt="">
+    <div class="velo"></div>
+    <div class="caja" id="lamina" hidden>
+      <div class="ref" id="ref"></div>
+      <p class="texto" id="texto" lang="es"></p>
+      <div class="pie" id="pie"></div>
+    </div>
+    <div class="espera" id="espera">
+      <img src="assets/icono-512.png" alt="">
+      <div class="ref">United Church · International Ministries</div>
+    </div>
+    <p class="texto medida" id="medida" aria-hidden="true"></p>
+  </div>
+  <button class="engrane" id="engrane" aria-label="Panel del operador (F2)">⚙</button>
+  <aside class="panel" id="panel" hidden></aside>
+  <div class="aviso" id="aviso" role="status" hidden></div>
+  <script type="module" src="src/proyeccion/pantalla.js"></script>
+</body>
+</html>

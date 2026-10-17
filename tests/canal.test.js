@@ -62,3 +62,10 @@ test("ultimo da null sin red", async () => {
   const { f } = fetchFalso(new Error("sin red"));
   assert.equal(await crearCanal("t", { fetch: f }).ultimo("tablet"), null);
 });
+
+test("recientes devuelve los válidos de un origen en orden de t (para reconstruir el estado al recargar)", async () => {
+  const ms = [msgPasaje({ codigo: "PSA.119", sigla: "TLA", completo: true }, 10), { v: 1, de: "tablet", tipo: "parte", parte: 3, t: 30 },
+    msgEstado({ codigo: "PSA.119", partes: 9, parte: 3 }, 31), { v: 1, de: "tablet", tipo: "parte", parte: 2, t: 20 }];
+  const { f } = fetchFalso({ ok: true, status: 200, text: ms.map(m => JSON.stringify({ event: "message", message: JSON.stringify(m) })).join("\n") });
+  assert.deepEqual((await crearCanal("t", { fetch: f }).recientes("tablet")).map(m => m.t), [10, 20, 30]);
+});

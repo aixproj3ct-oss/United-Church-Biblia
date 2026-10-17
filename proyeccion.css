@@ -1,0 +1,35 @@
+/* Pantalla de proyección: lámina fija de 1920×1080 (estilo «C» aprobado), escalada a la ventana. */
+:root{--oro:#e8b44a;--ambar:#ffb24d;--blanco:#fbf7ef;--s:1}
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Montserrat,sans-serif}
+.escenario{position:absolute;left:50%;top:50%;width:1920px;height:1080px;overflow:hidden;transform:translate(-50%,-50%) scale(var(--s));color:var(--blanco)}
+.foto{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.velo{position:absolute;inset:0;background:linear-gradient(90deg,rgba(14,30,48,.82),rgba(14,30,48,.55) 52%,transparent 78%)}
+.caja{position:absolute;top:110px;bottom:110px;left:150px;width:1000px;display:flex;flex-direction:column;justify-content:center}
+.caja[hidden],.espera[hidden]{display:none}
+.ref{font-family:"Playfair Display",serif;font-style:italic;font-weight:500;font-size:74px;line-height:1.1;color:var(--ambar);margin-bottom:18px;
+  text-shadow:0 0 36px rgba(255,150,40,.65),0 0 10px rgba(255,170,70,.35),0 2px 4px rgba(0,0,0,.6)}
+.texto{margin:0;font-weight:500;line-height:1.45;text-shadow:0 2px 18px rgba(0,0,0,.55);hyphens:manual;-webkit-hyphens:manual;overflow-wrap:normal}
+.texto .num{color:var(--oro);font-weight:600;font-size:.7em;vertical-align:.35em;margin:0 .25em 0 .15em}
+.texto .relleno .de{font-size:.45em;color:var(--oro);letter-spacing:.1em;margin-left:.2em}
+.texto.aviso-texto{font-size:48px;opacity:.9}
+.pie{margin-top:30px;font-size:22px;letter-spacing:.38em;text-transform:uppercase;opacity:.75}
+.medida{position:absolute;left:-5000px;top:0;width:1000px;visibility:hidden}
+.espera{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px}
+.espera img{width:260px;height:260px;border-radius:50%;box-shadow:0 10px 50px rgba(0,0,0,.6)}
+.espera .ref{font-size:60px;margin:0}
+/* Controles del operador: fuera del escenario, no salen en la lámina */
+.engrane{position:fixed;right:14px;bottom:14px;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.55);color:#fff;font-size:22px;cursor:pointer;opacity:0;transition:opacity .3s}
+.engrane.visible{opacity:1}
+.panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,90vw);overflow:auto;background:#10141c;color:#e8edf5;padding:20px 22px;box-shadow:-10px 0 40px rgba(0,0,0,.6);font-size:15px;z-index:5}
+.panel h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#9aa6b8;margin:22px 0 8px}
+.panel .codigo{font:600 30px/1.2 Montserrat,sans-serif;letter-spacing:.06em;color:var(--ambar)}
+.panel button,.panel label.boton{font:inherit;border:1px solid #2c3442;background:#1a202b;color:#e8edf5;border-radius:10px;padding:8px 12px;cursor:pointer;margin:4px 6px 4px 0;display:inline-block}
+.panel button.principal{background:#2563eb;border-color:#2563eb}
+.panel ul{list-style:none;margin:0;padding:0}.panel li{padding:6px 0;border-bottom:1px solid #222a36}
+.panel small{color:#9aa6b8}
+.fondos{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.fondos button{padding:0;margin:0;border:2px solid transparent;border-radius:8px;overflow:hidden;aspect-ratio:16/9}
+.fondos button.sel{border-color:var(--ambar)}
+.fondos img{width:100%;height:100%;object-fit:cover;display:block}
+.punto{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:6px}.punto.ok{background:#22c55e}
+.aviso{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#e8edf5;color:#000;padding:12px 18px;border-radius:12px;z-index:6;font-size:15px}
