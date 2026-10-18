@@ -21,7 +21,14 @@ public class Ventana {
 # Medir en píxeles reales en cualquier monitor (si no, Windows escala las coordenadas y el recorte sale mal).
 [Ventana]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
 function Aviso($t) { [System.Windows.MessageBox]::Show($t, "Proyectar tablet") | Out-Null }
-function Buscar { Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq $titulo } | Select-Object -First 1 }
+# Chrome propio para la proyección: así sigue dibujando aunque EasyWorship tape la ventana
+# (el Chrome normal deja de pintar las ventanas tapadas y OBS recibe una imagen congelada).
+$perfil = Join-Path $env:LOCALAPPDATA "ProyectarTablet\Chrome"
+$opciones = @("--user-data-dir=`"$perfil`"", "--no-first-run", "--no-default-browser-check",
+  "--disable-features=CalculateNativeWinOcclusion", "--disable-backgrounding-occluded-windows",
+  "--disable-renderer-backgrounding", "--disable-background-timer-throttling")
+function EsNuestro($p) { (Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)" -ErrorAction SilentlyContinue).CommandLine -like "*ProyectarTablet*" }
+function Buscar { Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq $titulo -and (EsNuestro $_) } | Select-Object -First 1 }
 function Marco($h) { $r = New-Object Ventana+R; [Ventana]::DwmGetWindowAttribute($h, 9, [ref]$r, 16) | Out-Null; $r }
 function Contenido($h) {
   $raiz = [System.Windows.Automation.AutomationElement]::FromHandle($h)
@@ -33,9 +40,11 @@ function Contenido($h) {
 $chrome = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe", "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe", "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $chrome) { Aviso "No encontré Google Chrome. Instálalo y vuelve a intentar."; exit 1 }
 
+# Cierra una ventana de proyección abierta con el Chrome normal (versión anterior de este acceso directo).
+Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq $titulo -and -not (EsNuestro $_) } | ForEach-Object { $_.CloseMainWindow() | Out-Null }
 $p = Buscar
 if (-not $p) {
-  Start-Process $chrome -ArgumentList "--app=$url", "--window-size=1280,760", "--window-position=60,60", "--new-window"
+  Start-Process $chrome -ArgumentList ($opciones + @("--app=$url", "--window-size=1280,760", "--window-position=60,60"))
   for ($i = 0; $i -lt 40 -and -not ($p = Buscar); $i++) { Start-Sleep -Milliseconds 500 }
   if (-not $p) { Aviso "No se abrió la ventana de proyección."; exit 1 }
 }
