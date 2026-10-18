@@ -9,7 +9,12 @@ UNA SOLA VEZ (instalación)
    - Cargar archivo: carga TLA.xml y luego RVR1960.xml (la TLA queda como principal).
    - Anota el CÓDIGO DE CONEXIÓN (por ejemplo UC-7K4P-9QX2).
 4. En la tablet del pastor: Configuración -> Pantalla de proyección -> escribe el código -> Conectar.
-5. En EasyWorship: agrega un Live Video y elige la cámara "OBS Virtual Camera".
+5. En EasyWorship: agrega un Live Video (feed) con la cámara "OBS Virtual Camera - (DirectShow)" y estos valores:
+   - Resolution: HD 1080 · FPS: 60i (es la única opción; OBS está en 60)
+   - Color Space: YUY2 - 8 bit 4:2:2   <- IMPORTANTE: con NV12 la imagen sale corrupta (letras repetidas, colores fuera de lugar)
+   - Aspect Ratio: Automatic · Audio: Mute
+   Si las opciones salen bloqueadas ("Device is already in use"), quita el feed de la salida y de la vista previa,
+   o cierra y abre EasyWorship, y edítalo antes de ponerlo en vivo.
 
 CADA DOMINGO
 1. Doble clic en "Proyectar tablet" (abre la ventana y la cámara de OBS).
