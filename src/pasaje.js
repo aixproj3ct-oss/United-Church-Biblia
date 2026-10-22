@@ -4,7 +4,6 @@ import { LIBROS } from "./libros.js";
 
 const CODIGOS = LIBROS.map(l => l[0]);
 export const numeroLibro = codigo => CODIGOS.indexOf(codigo) + 1;
-export const codigoLibro = n => CODIGOS[n - 1] ?? null;
 
 export function refDeCodigo(codigo) {
   const m = String(codigo ?? "").match(/^([0-9A-Z]{3})\.(\d+)(?:\.(\d+)(?:-(\d+))?)?$/);
@@ -69,3 +68,24 @@ export function armarPasaje({ principal, alternativas = [], desde = null, hasta 
 // Orden de relleno: primero la RV 1960 si está cargada, luego las demás en orden de carga.
 export const ordenAlternativas = (ms, actual) => ms.filter(m => m.sigla !== actual)
   .sort((a, b) => (/1960/.test(b.sigla) ? 1 : 0) - (/1960/.test(a.sigla) ? 1 : 0) || a.orden - b.orden);
+
+// Abreviatura corta para fichas: "1 Co", "Sal", "Jn".
+export function abreviatura(codigo) {
+  const a = LIBROS[numeroLibro(codigo) - 1]?.[3]?.[0] ?? codigo.toLowerCase();
+  const m = a.match(/^([1-3]?)(.*)$/);
+  return (m[1] ? m[1] + " " : "") + m[2].charAt(0).toUpperCase() + m[2].slice(1);
+}
+
+// Carga lo que muestra un pasaje (lector o pantalla): la versión pedida si está cargada (si no, la principal)
+// y las demás como relleno. Sin versiones devuelve actual:null.
+export async function cargarPasaje(biblias, ref, siglaPedida, completo) {
+  const versiones = await biblias.versiones();
+  if (!versiones.length) return { actual: null, versiones: [], pasaje: null };
+  const actual = versiones.some(v => v.sigla === siglaPedida) ? siglaPedida : await biblias.principal();
+  const alts = ordenAlternativas(versiones, actual);
+  const caps = await Promise.all([actual, ...alts.map(a => a.sigla)].map(s => biblias.capitulo(s, ref.codigo, ref.cap)));
+  const pasaje = armarPasaje({ principal: { sigla: actual, cap: caps[0] }, alternativas: alts.map((a, i) => ({ sigla: a.sigla, cap: caps[i + 1] })),
+    desde: completo ? null : ref.v1, hasta: completo ? null : (ref.v2 ?? ref.v1) });
+  return { actual, versiones, pasaje };
+}
+

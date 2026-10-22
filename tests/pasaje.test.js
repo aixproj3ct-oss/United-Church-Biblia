@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { armarPasaje, refDeCodigo, etiquetaRef, codigoRef, capituloVecino, numeroLibro, codigoLibro } from "../src/pasaje.js";
+import { armarPasaje, refDeCodigo, etiquetaRef, codigoRef, capituloVecino, numeroLibro, cargarPasaje, abreviatura } from "../src/pasaje.js";
 
 // Capítulo con agrupados: 1 trae el texto de 1-3, 4 y 5 normales, 6-7 agrupados.
 const TLA = { 1: "a", 2: "", 3: "", 4: "b", 5: "c", 6: "d", 7: "" };
@@ -79,7 +79,6 @@ test("capituloVecino cruza de libro y se detiene en los extremos", () => {
   assert.equal(capituloVecino("REV", 22, 1), null);
   assert.equal(numeroLibro("GEN"), 1);
   assert.equal(numeroLibro("REV"), 66);
-  assert.equal(codigoLibro(43), "JHN");
 });
 
 test("capítulo que no tiene ninguna versión cargada: marca vacio (nunca pantalla en blanco)", () => {
@@ -93,3 +92,27 @@ test("ordenAlternativas pone la RV 1960 primero", async () => {
   const ms = [{ sigla: "TLA", orden: 1 }, { sigla: "NVI", orden: 2 }, { sigla: "RVR 1960", orden: 3 }];
   assert.deepEqual(ordenAlternativas(ms, "TLA").map(m => m.sigla), ["RVR 1960", "NVI"]);
 });
+
+test("abreviatura del libro para las fichas de Guardados", () => {
+  assert.equal(abreviatura("1CO"), "1 Co");
+  assert.equal(abreviatura("PSA"), "Sal");
+  assert.equal(abreviatura("JHN"), "Jn");
+  assert.equal(abreviatura("GEN"), "Gn");
+});
+
+test("cargarPasaje usa la versión pedida, cae a la principal y arma el pasaje", async () => {
+  const { crearBiblias, backendMemoria } = await import("../src/biblias.js");
+  const b = crearBiblias(backendMemoria());
+  assert.deepEqual(await cargarPasaje(b, { codigo: "JHN", cap: 3, v1: 16, v2: null }, "TLA", false), { actual: null, versiones: [], pasaje: null });
+  const libros = t => ({ 43: { 3: { 16: t + " 16", 17: t + " 17" } } });
+  await b.guardar({ sigla: "AAA", nombre: "A", derechos: "", libros: libros("a"), resumen: { libros: 1, versiculos: 2, agrupados: 0 } });
+  await b.guardar({ sigla: "BBB", nombre: "B", derechos: "", libros: libros("b"), resumen: { libros: 1, versiculos: 2, agrupados: 0 } });
+  const r1 = await cargarPasaje(b, { codigo: "JHN", cap: 3, v1: 16, v2: null }, "NOEXISTE", false);
+  assert.equal(r1.actual, "AAA");
+  assert.equal(r1.pasaje.bloques.length, 1);
+  const r2 = await cargarPasaje(b, { codigo: "JHN", cap: 3, v1: 16, v2: null }, "BBB", true);
+  assert.equal(r2.actual, "BBB");
+  assert.equal(r2.pasaje.bloques.length, 2);
+  assert.deepEqual(r2.versiones.map(v => v.sigla), ["AAA", "BBB"]);
+});
+
