@@ -4,28 +4,42 @@
   <meta charset="utf-8">
   <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1a4a">
+  <meta name="theme-color" content="#07122b">
   <title>United Church</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icono-192.png">
   <link rel="apple-touch-icon" href="assets/icono-192.png">
+  <link rel="stylesheet" href="assets/fuentes/fuentes.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-dom" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4M8 14h3"/></symbol>
+    <symbol id="i-bib" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M12 7v6M9.5 9.5h5"/></symbol>
+    <symbol id="i-gua" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></symbol>
+    <symbol id="i-cfg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+    <symbol id="i-bus" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-der" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-izq" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
+    <symbol id="i-pant" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+    <symbol id="i-est" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  </defs></svg>
   <aside class="lateral">
     <div class="marca">
-      <img src="assets/icono-192.png" alt="" width="56" height="56">
+      <img src="assets/icono-192.png" alt="" width="52" height="52">
       <div><b>United Church</b><small>International Ministries</small></div>
     </div>
-    <nav class="menu">
-      <button data-ir="inicio"><span class="ic">⌂</span>Inicio</button>
-      <button data-ir="domingo"><span class="ic">📖</span>Pasajes del domingo</button>
-      <button data-ir="favoritos"><span class="ic">☆</span>Favoritos y series</button>
-      <button data-ir="historial"><span class="ic">🕘</span>Historial</button>
-      <button data-ir="biblia"><span class="ic">✝</span>Abrir Biblia</button>
-      <button data-ir="config"><span class="ic">⚙</span>Configuración</button>
+    <nav class="nav">
+      <button data-ir="domingo"><svg class="ico"><use href="#i-dom"/></svg>Domingo</button>
+      <button data-ir="biblia"><svg class="ico"><use href="#i-bib"/></svg>Biblia</button>
+      <button data-ir="guardados"><svg class="ico"><use href="#i-gua"/></svg>Guardados</button>
     </nav>
-    <div class="atajo"><span>✦ ATAJO RÁPIDO</span>Escribe como quieras: “jn 3 16”, “sal 23”, “1 co 13 del 4 al 7”.</div>
+    <nav class="nav pie-nav">
+      <button data-ir="config"><svg class="ico"><use href="#i-cfg"/></svg>Configuración</button>
+    </nav>
   </aside>
   <main id="vista" class="principal"></main>
   <dialog id="dlg-fav">
@@ -34,9 +48,10 @@
       <p class="sub">Elige una serie o escribe una nueva</p>
       <div id="fav-series" class="chips"></div>
       <input id="fav-nueva" placeholder="Nueva serie (ej. Bodas)" maxlength="40">
-      <div class="acciones acciones-dlg"><button value="ok" class="btn-primario">Guardar</button><button value="cancelar" class="btn-sec">Cancelar</button></div>
+      <div class="acciones acciones-dlg"><button value="ok" class="btn pri">Guardar</button><button value="cancelar" class="btn">Cancelar</button></div>
     </form>
   </dialog>
+  <div id="actualizar" class="actualizar" hidden>Hay una versión nueva · <button class="btn pri" id="b-actualizar">Actualizar</button></div>
   <div id="aviso" class="aviso" role="status" hidden></div>
   <script type="module" src="app.js"></script>
 </body>
