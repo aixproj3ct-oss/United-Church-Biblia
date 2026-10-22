@@ -2,14 +2,14 @@
 // en una lámina 16:9 con la Biblia cargada en esta PC. El texto bíblico nunca viaja por la red.
 import { crearBiblias } from "../biblias.js";
 import { decodificar, importarBiblia, ErrorBiblia } from "../importar.js";
-import { armarPasaje, refDeCodigo, etiquetaRef, ordenAlternativas } from "../pasaje.js";
+import { cargarPasaje, refDeCodigo, etiquetaRef } from "../pasaje.js";
 import { repartir, refDeParte } from "./partes.js";
 import { generarCodigo, temaDe, crearOrden, msgEstado } from "./mensajes.js";
 import { crearCanal } from "./canal.js";
+import { esc, aviso } from "../ui.js";
 
 const CLAVE = "uc-pantalla-v1", N_FONDOS = 11;
 const $ = s => document.querySelector(s);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const urlFondo = n => `assets/proyeccion/fondos/${String(n).padStart(2, "0")}.jpg`;
 const biblias = crearBiblias();
 
@@ -25,8 +25,7 @@ function guardarConf(c) { try { localStorage.setItem(CLAVE, JSON.stringify(c)); 
 let conf = leerConf(), canal = null, cerrarCanal = null, orden = crearOrden(), cola = Promise.resolve();
 let actual = null; // { codigo, refBase, partes, tam, parte, unaParte }
 let conectado = false;
-
-function aviso(msg, ms = 4000) { const a = $("#aviso"); a.textContent = msg; a.hidden = false; clearTimeout(aviso.t); aviso.t = setTimeout(() => (a.hidden = true), ms); }
+let altoRef = 0; // alto de la referencia más alta entre las partes (una referencia larga puede ocupar dos líneas)
 function escalar() { document.documentElement.style.setProperty("--s", Math.min(innerWidth / 1920, innerHeight / 1080)); }
 function pintarFondo() { $("#foto").src = urlFondo(conf.fondo); }
 
@@ -34,7 +33,7 @@ const htmlBloques = bs => bs.map(b => `<span class="vers${b.sigla ? " relleno" :
 
 // ¿Caben estos bloques a este tamaño en la caja, dejando lugar para la referencia y el pie?
 function cabe(bloques, tam) {
-  const disponible = 1080 - 2 * 60 - $("#ref").offsetHeight - 18 - $("#pie").offsetHeight - 30;
+  const disponible = 1080 - 2 * 60 - Math.max(altoRef, $("#ref").offsetHeight) - 18 - $("#pie").offsetHeight - 30;
   const m = $("#medida");
   m.style.fontSize = tam + "px";
   m.innerHTML = htmlBloques(bloques);
@@ -59,14 +58,9 @@ function publicarEstado() {
 }
 
 async function mostrarPasaje(m) {
-  const ms = await biblias.versiones();
-  if (!ms.length) { actual = null; return mostrarMensaje("", "Carga una Biblia (F2)"); }
-  const ref = refDeCodigo(m.codigo), principal = await biblias.principal();
-  const sigla = ms.some(v => v.sigla === m.sigla) ? m.sigla : principal;
-  const alts = ordenAlternativas(ms, sigla);
-  const caps = await Promise.all([sigla, ...alts.map(a => a.sigla)].map(s => biblias.capitulo(s, ref.codigo, ref.cap)));
-  const r = armarPasaje({ principal: { sigla, cap: caps[0] }, alternativas: alts.map((a, i) => ({ sigla: a.sigla, cap: caps[i + 1] })),
-    desde: m.completo ? null : ref.v1, hasta: m.completo ? null : (ref.v2 ?? ref.v1) });
+  const ref = refDeCodigo(m.codigo);
+  const { actual: sigla, versiones: ms, pasaje: r } = await cargarPasaje(biblias, ref, m.sigla, m.completo);
+  if (!sigla) { actual = null; return mostrarMensaje("", "Carga una Biblia (F2)"); }
   const refBase = m.completo ? { ...ref, v1: null, v2: null } : ref;
   if (conf.rotar && actual?.codigo !== m.codigo) { conf = guardarConf({ ...conf, fondo: conf.fondo % N_FONDOS + 1 }); pintarFondo(); }
   if (!r.bloques.length) {
@@ -77,8 +71,13 @@ async function mostrarPasaje(m) {
   $("#espera").hidden = true; $("#lamina").hidden = false;
   $("#ref").textContent = etiquetaRef(refBase);
   $("#pie").textContent = ms.find(v => v.sigla === sigla)?.nombre || sigla;
-  const { tam, partes } = repartir(r.bloques, cabe);
-  actual = { codigo: m.codigo, refBase, partes, tam, parte: Math.min(m.parte, partes.length - 1) };
+  // Se reparte midiendo con la referencia completa; si la de alguna parte ocupa más alto, se reparte otra vez con ese alto.
+  altoRef = 0;
+  const base = $("#ref").offsetHeight;
+  let { tam, partes } = repartir(r.bloques, cabe);
+  const alto = Math.max(...partes.map(p => { $("#ref").textContent = partes.length > 1 ? refDeParte(refBase, p) : etiquetaRef(refBase); return $("#ref").offsetHeight; }));
+  if (alto > base) { altoRef = alto; ({ tam, partes } = repartir(r.bloques, cabe)); }
+  actual ={ codigo: m.codigo, refBase, partes, tam, parte: Math.min(m.parte, partes.length - 1) };
   dibujar();
   publicarEstado();
 }
@@ -178,5 +177,10 @@ escalar();
 pintarFondo();
 mostrarEspera();
 navigator.storage?.persist?.().catch?.(() => {});
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator) {
+  // La PC de la iglesia nadie la toca: cuando llega una versión nueva, se recarga sola (si ya había una funcionando).
+  const habia = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (habia) location.reload(); });
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
 conectar();

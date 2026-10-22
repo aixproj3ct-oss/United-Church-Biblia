@@ -28,3 +28,5 @@ IMPORTANTE
 - El panel (F2) se ve en la cámara mientras está abierto: úsalo antes del culto o con el Live Video fuera de pantalla.
 - Teclas en la ventana: F2 panel · flechas izquierda/derecha cambian de parte · Esc pantalla de espera.
 - Si se va internet, la pantalla se queda con el último pasaje y se reconecta sola.
+- La ventana usa su propio perfil de Chrome. Si ese perfil se borra o se crea uno nuevo, empieza sin Biblias
+  y con OTRO código: vuelve a cargar las Biblias (F2) y escribe el código nuevo en la tablet.

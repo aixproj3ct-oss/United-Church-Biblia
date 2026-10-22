@@ -70,6 +70,7 @@ for ($intento = 0; $intento -lt 3; $intento++) {
   $recorte = @{ top = [int]($c.Top - $m.T); left = [int]($c.Left - $m.L); right = [int]($m.Rt - $c.Right); bottom = [int]($m.B - $c.Bottom) }
   break
 }
+if (-not $recorte) { Aviso "No pude medir la ventana; avísame para revisarlo." }
 
 # Escribe el recorte en la escena de OBS (solo si cambió; OBS debe estar cerrado para releerla).
 $obs = Get-Process obs64 -ErrorAction SilentlyContinue
