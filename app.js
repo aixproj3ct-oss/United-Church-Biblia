@@ -153,8 +153,9 @@ async function armarIndice() {
 }
 
 async function buscarTexto(consulta, sigla = null) {
-  busqueda = { consulta, sigla, resultados: null, versiones: (await biblias.versiones()).map(m => m.sigla) };
+  busqueda = { consulta, sigla, resultados: null, versiones: busqueda?.versiones ?? [] };
   pintar();
+  busqueda.versiones = (await biblias.versiones()).map(m => m.sigla);
   if (!indice) { $("#resultados").innerHTML = `<p class="meta">Preparando la búsqueda… (solo la primera vez)</p>`; indice = armarIndice(); }
   const idx = await indice;
   if (busqueda?.consulta !== consulta) return;

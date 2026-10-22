@@ -78,7 +78,7 @@ export function crearBiblias(backend = backendIndexedDB()) {
       invalidar();
     },
     async capitulo(sigla, codigo, cap) {
-      const meta = await backend.get("v:" + sigla);
+      const meta = (await metas()).find(m => m.sigla === sigla);   // en memoria: el índice de búsqueda lee miles de capítulos
       const n = numeroLibro(codigo);
       if (!meta || !n) return null;
       const clave = `t:${sigla}:${meta.gen}:${n}`;
