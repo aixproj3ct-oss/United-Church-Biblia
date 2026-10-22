@@ -317,6 +317,7 @@ document.addEventListener("click", async ev => {
   if (d.tema) { almacen.guardarConfig({ tema: d.tema }); return pintar(); }
   if (d.letra) { almacen.guardarConfig({ letra: d.letra }); return pintar(); }
   if (d.capitulo) { const c = dec(d.capitulo); return abrirCapitulo(c.codigo, c.cap); }
+  if (d.versiculo) { const r = dec(d.versiculo); return abrir({ codigo: codigoRef(r), etiqueta: etiquetaRef(r) }, { navegando: true }); }
   if (d.libro !== undefined) { libroSel = d.libro || null; pintar(); return ($("#vista").scrollTop = 0); }
   if (d.testamento) { testamento = d.testamento; libroSel = null; return pintar(); }
   if (d.pestana) { pestana = d.pestana; return pintar(); }

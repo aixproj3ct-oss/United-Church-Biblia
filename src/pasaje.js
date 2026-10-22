@@ -29,6 +29,20 @@ export function capituloVecino(codigo, cap, paso) {
 const numeros = cap => Object.keys(cap || {}).map(Number).filter(n => n >= 1).sort((a, b) => a - b);
 const tieneTexto = (cap, n) => typeof cap?.[n] === "string" && cap[n] !== "";
 
+// Versículo siguiente (paso 1) o anterior (-1) del pasaje, saltando los vacíos de un grupo y cruzando de capítulo.
+// `leer(codigo, cap)` devuelve el capítulo de la versión que se lee. Sin vecino devuelve null.
+export async function versiculoVecino({ codigo, cap, v1, v2 }, paso, leer) {
+  const conTexto = c => numeros(c).filter(n => tieneTexto(c, n));
+  const aqui = conTexto(await leer(codigo, cap));
+  const n = paso > 0 ? aqui.find(x => x > (v2 ?? v1)) : aqui.filter(x => x < v1).pop();
+  if (n) return { codigo, cap, v1: n, v2: null };
+  const vecino = capituloVecino(codigo, cap, paso);
+  if (!vecino) return null;
+  const alla = conTexto(await leer(vecino.codigo, vecino.cap));
+  const m = paso > 0 ? alla[0] : alla.at(-1);
+  return m ? { ...vecino, v1: m, v2: null } : null;
+}
+
 function bloquesDe(cap) {
   const bloques = [];
   for (const n of numeros(cap)) {

@@ -103,14 +103,18 @@ body.en-lector .principal{padding:0;overflow:hidden}
 .versiones{display:inline-flex;padding:4px;border-radius:999px;border:1.5px solid var(--oro);background:var(--card);flex:none}
 .versiones button{padding:0 16px;height:40px;border:0;border-radius:999px;font-weight:600;font-size:16px;color:var(--sub);background:none}
 .versiones button.on{background:var(--oro);color:#1d1300}
-.l-cuerpo{flex:1;overflow-y:auto;padding:18px 34px 20px}
+.l-cuerpo{flex:1;overflow-y:auto;padding:18px 34px 20px;display:flex;flex-direction:column}
+/* Centrado: un versículo corto queda en medio de la pantalla; un pasaje largo llena el ancho y se desplaza. */
+.l-texto{margin:auto;width:fit-content;max-width:min(100%,1100px)}
 .texto-biblia{font-size:calc(var(--base) * 1.25);line-height:1.7;text-align:justify;hyphens:manual;-webkit-hyphens:manual;overflow-wrap:normal;margin:0 0 18px}
 .texto-biblia .num{color:var(--azul);font-weight:600;font-size:1.05em;margin-right:.25em}
 .texto-biblia .relleno{background:var(--oro-f);border-radius:6px;box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:0 .15em}
 .texto-biblia .de{font-size:.7em;color:var(--oro-t);font-weight:700}
 .aviso-relleno{background:var(--oro-f);border:1px solid var(--oro-b);border-radius:14px;padding:12px 16px;color:var(--oro-t)}
-.l-cap{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0 4px}
+.l-cap{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border-top:1px solid var(--linea);background:var(--card)}
+.l-cap:empty{display:none}
 .l-cap button:not(.estrella){padding:8px 14px;border-radius:999px;border:1px solid var(--linea);background:var(--card);font-size:14px;color:var(--sub);min-height:44px}
+.l-cap .vers-b{font-size:16px!important;font-weight:600;color:var(--tinta)!important;border-color:var(--m2)!important;padding:8px 18px!important;min-height:48px!important}
 .l-cap button[disabled]{opacity:.4}
 /* Barra fija del lector */
 .barra{background:linear-gradient(90deg,var(--m1),#0e2457 55%,var(--m2));color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 -8px 24px rgba(0,0,0,.18)}

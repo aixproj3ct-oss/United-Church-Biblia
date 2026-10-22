@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { armarPasaje, refDeCodigo, etiquetaRef, codigoRef, capituloVecino, numeroLibro, cargarPasaje, abreviatura } from "../src/pasaje.js";
+import { armarPasaje, refDeCodigo, etiquetaRef, codigoRef, capituloVecino, versiculoVecino, numeroLibro, cargarPasaje, abreviatura } from "../src/pasaje.js";
 
 // Capítulo con agrupados: 1 trae el texto de 1-3, 4 y 5 normales, 6-7 agrupados.
 const TLA = { 1: "a", 2: "", 3: "", 4: "b", 5: "c", 6: "d", 7: "" };
@@ -116,3 +116,14 @@ test("cargarPasaje usa la versión pedida, cae a la principal y arma el pasaje",
   assert.deepEqual(r2.versiones.map(v => v.sigla), ["AAA", "BBB"]);
 });
 
+
+test("versículo vecino: salta los vacíos de un grupo y cruza de capítulo", async () => {
+  const caps = { "GEN.1": TLA, "GEN.2": { 1: "x", 2: "y" }, "EXO.40": { 37: "u", 38: "v" } };
+  const leer = async (codigo, cap) => caps[`${codigo}.${cap}`] ?? null;
+  assert.deepEqual(await versiculoVecino({ codigo: "GEN", cap: 1, v1: 1, v2: null }, 1, leer), { codigo: "GEN", cap: 1, v1: 4, v2: null });
+  assert.deepEqual(await versiculoVecino({ codigo: "GEN", cap: 1, v1: 4, v2: 6 }, 1, leer), { codigo: "GEN", cap: 2, v1: 1, v2: null });
+  assert.deepEqual(await versiculoVecino({ codigo: "GEN", cap: 1, v1: 4, v2: 5 }, -1, leer), { codigo: "GEN", cap: 1, v1: 1, v2: null });
+  assert.deepEqual(await versiculoVecino({ codigo: "GEN", cap: 2, v1: 1, v2: null }, -1, leer), { codigo: "GEN", cap: 1, v1: 6, v2: null });
+  assert.deepEqual(await versiculoVecino({ codigo: "LEV", cap: 1, v1: 1, v2: null }, -1, leer), { codigo: "EXO", cap: 40, v1: 38, v2: null });
+  assert.equal(await versiculoVecino({ codigo: "GEN", cap: 1, v1: 1, v2: null }, -1, leer), null);
+});

@@ -1,6 +1,6 @@
 // Lector a pantalla completa y su barra fija: partes, plan del domingo y pantalla de proyección.
 // pintarLector() solo dibuja; lo único que publica después de un pintado es sincronizarProyeccion().
-import { cargarPasaje, etiquetaRef, capituloVecino } from "./pasaje.js";
+import { cargarPasaje, etiquetaRef, capituloVecino, versiculoVecino } from "./pasaje.js";
 import { seguirTrasAtras } from "./lectura.js";
 import { crearCanal } from "./proyeccion/canal.js";
 import { temaDe, msgPasaje, msgParte, msgEspera } from "./proyeccion/mensajes.js";
@@ -94,6 +94,7 @@ export function vistaLector(lectura) {
     <h1 class="ref">${esc(titulo(lectura))}</h1>
     <button class="ib" data-buscar aria-label="Buscar">${ic("bus")}</button><span class="versiones" id="l-versiones"></span></header>
     <div class="l-cuerpo" id="l-cuerpo"><p class="meta">Abriendo…</p></div>
+    <nav class="l-cap" id="l-cap"></nav>
     <footer class="barra" id="l-barra" hidden></footer></section>`;
 }
 
@@ -110,6 +111,7 @@ async function dibujar(lectura) {
   if (!cuerpo?.isConnected) return;
   if (!actual) {
     mostrada = { lectura: null, sigla: null };
+    $("#l-cap").innerHTML = "";
     cuerpo.innerHTML = `<div class="card form"><h2>Todavía no hay una Biblia cargada</h2><p class="meta">Carga una Biblia en Configuración → Versiones de la Biblia.</p>
       <div><button class="btn pri" data-ir="config">Ir a Configuración</button></div></div>`;
     return pintarBarra();
@@ -118,15 +120,22 @@ async function dibujar(lectura) {
   const { codigo, cap, v1 } = lectura.ref;
   $("#l-versiones").innerHTML = versiones.map(m => `<button class="${m.sigla === actual ? "on" : ""}" data-version="${esc(m.sigla)}">${esc(m.sigla)}</button>`).join("");
   const antes = capituloVecino(codigo, cap, -1), despues = capituloVecino(codigo, cap, 1);
+  // Versículo anterior/siguiente: solo cuando se lee un pasaje (no el capítulo completo).
+  const leer = (c, k) => biblias.capitulo(actual, c, k);
+  const [vAnt, vSig] = lectura.completo ? [null, null] : await Promise.all([versiculoVecino(lectura.ref, -1, leer), versiculoVecino(lectura.ref, 1, leer)]);
+  if (!cuerpo.isConnected) return;
   const texto = r.bloques.map(b => `<span class="vers${b.sigla ? " relleno" : ""}"><b class="num">${esc(b.etiqueta)}</b>${esc(b.texto)}${b.sigla ? ` <small class="de">${esc(b.sigla)}</small>` : ""}</span>`).join(" ");
   const relleno = r.rellenoDe.length ? `<p class="aviso-relleno">Este pasaje no está en tu archivo ${esc(actual)}; se muestra en ${esc(r.rellenoDe.join(" y "))}</p>` : "";
   const falta = r.vacio ? `<p class="meta">Este capítulo no está en las Biblias cargadas.</p>`
     : r.sinTexto.length ? `<p class="meta">${r.bloques.length ? `Versículo${r.sinTexto.length > 1 ? "s" : ""} ${esc(r.sinTexto.join(", "))}: ` : ""}Este versículo no está en las Biblias cargadas.</p>` : "";
-  cuerpo.innerHTML = `${relleno}<p class="texto-biblia" lang="es">${texto}</p>${falta}
-    <div class="l-cap"><button ${antes ? `data-capitulo="${enc(antes)}"` : "disabled"}>‹ Capítulo anterior</button>
-      ${v1 ? `<button data-completo>${lectura.completo ? "Ver solo el pasaje" : "Ver capítulo completo"}</button>` : ""}
-      <button ${despues ? `data-capitulo="${enc(despues)}"` : "disabled"}>Capítulo siguiente ›</button>
-      <button class="estrella" data-fav="${enc(lectura.cita)}" aria-label="Guardar en favoritos">${ic("est")}</button></div>`;
+  cuerpo.innerHTML = `<div class="l-texto">${relleno}<p class="texto-biblia" lang="es">${texto}</p>${falta}</div>`;
+  const vers = !lectura.completo;
+  $("#l-cap").innerHTML = `<button class="cap" ${antes ? `data-capitulo="${enc(antes)}"` : "disabled"}>‹ Capítulo</button>
+    ${vers ? `<button class="vers-b" ${vAnt ? `data-versiculo="${enc(vAnt)}"` : "disabled"}>‹ Versículo anterior</button>` : ""}
+    ${v1 ? `<button data-completo>${lectura.completo ? "Ver solo el pasaje" : "Ver capítulo completo"}</button>` : ""}
+    ${vers ? `<button class="vers-b" ${vSig ? `data-versiculo="${enc(vSig)}"` : "disabled"}>Versículo siguiente ›</button>` : ""}
+    <button class="cap" ${despues ? `data-capitulo="${enc(despues)}"` : "disabled"}>Capítulo ›</button>
+    <button class="estrella" data-fav="${enc(lectura.cita)}" aria-label="Guardar en favoritos">${ic("est")}</button>`;
   pintarBarra();
 }
 
