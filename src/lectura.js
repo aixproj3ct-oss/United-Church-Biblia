@@ -17,3 +17,6 @@ export function seguirProyeccion(proy, { navegando = false, domingo = null } = {
   if (domingo) return true;
   return navegando ? proy.seguir : false;
 }
+
+// Al volver con Atrás, la pantalla solo sigue al lector si se volvió justo al pasaje que está en pantalla.
+export const seguirTrasAtras = (proy, claveRestaurada) => !!proy.activo && claveRestaurada === proy.enviado;

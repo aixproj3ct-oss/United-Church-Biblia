@@ -46,3 +46,11 @@ test("crearOrden (Review Focus 2)", () => {
   assert.equal(acepta({ de: "tablet", t: 10 }), false);
   assert.equal(acepta({ de: "pantalla", t: 5 }), true);
 });
+
+test("crearOrden rechaza mensajes con hora más de 60 s en el futuro", () => {
+  const acepta = crearOrden(() => 1000);
+  assert.equal(acepta({ de: "tablet", t: 900 }), true);
+  assert.equal(acepta({ de: "tablet", t: 70000 }), false);
+  assert.equal(acepta({ de: "tablet", t: 950 }), true);
+});
+

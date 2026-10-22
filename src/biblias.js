@@ -31,7 +31,10 @@ export function backendIndexedDB(nombre = "uc-biblias") {
 
 export function crearBiblias(backend = backendIndexedDB()) {
   const cache = new Map();
-  const metas = async () => {
+  let cacheMetas = null, cachePrincipal;
+  const invalidar = () => { cacheMetas = null; cachePrincipal = undefined; cache.clear(); };
+  const metas = async () => cacheMetas ??= leerMetas();
+  const leerMetas = async () => {
     const ks = (await backend.keys()).filter(k => String(k).startsWith("v:"));
     const ms = await Promise.all(ks.map(k => backend.get(k)));
     return ms.filter(Boolean).sort((a, b) => a.orden - b.orden);
@@ -44,23 +47,25 @@ export function crearBiblias(backend = backendIndexedDB()) {
     versiones: metas,
     async principal() {
       const ms = await metas();
-      const p = await backend.get("principal");
+      if (cachePrincipal === undefined) cachePrincipal = await backend.get("principal");
+      const p = cachePrincipal;
       return ms.some(m => m.sigla === p) ? p : ms[0]?.sigla ?? null;
     },
     async guardar(biblia) {
       const anterior = await backend.get("v:" + biblia.sigla);
       const ms = await metas();
       const gen = (anterior?.gen ?? 0) + 1;
+      await borrarLibros(biblia.sigla, gen);   // restos de un guardado anterior que falló a mitad
       for (const [n, libro] of Object.entries(biblia.libros)) await backend.put(`t:${biblia.sigla}:${gen}:${n}`, libro);
       const meta = { sigla: biblia.sigla, nombre: biblia.nombre, derechos: biblia.derechos, resumen: biblia.resumen, gen,
         orden: anterior?.orden ?? (ms.length ? Math.max(...ms.map(m => m.orden)) + 1 : 1) };
       await backend.put("v:" + biblia.sigla, meta);
       if (anterior) await borrarLibros(biblia.sigla, anterior.gen);
       if (!ms.length) await backend.put("principal", biblia.sigla);
-      cache.clear();
+      invalidar();
       return meta;
     },
-    async hacerPrincipal(sigla) { if (await backend.get("v:" + sigla)) await backend.put("principal", sigla); },
+    async hacerPrincipal(sigla) { if (await backend.get("v:" + sigla)) { await backend.put("principal", sigla); invalidar(); } },
     async quitar(sigla) {
       const meta = await backend.get("v:" + sigla);
       if (!meta) return;
@@ -70,7 +75,7 @@ export function crearBiblias(backend = backendIndexedDB()) {
         const resto = await metas();
         if (resto.length) await backend.put("principal", resto[0].sigla); else await backend.del("principal");
       }
-      cache.clear();
+      invalidar();
     },
     async capitulo(sigla, codigo, cap) {
       const meta = await backend.get("v:" + sigla);

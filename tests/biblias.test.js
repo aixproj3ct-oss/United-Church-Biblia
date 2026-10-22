@@ -62,3 +62,27 @@ test("hacerPrincipal ignora una sigla no cargada", async () => {
   await b.hacerPrincipal("NO");
   assert.equal(await b.principal(), "TLA");
 });
+
+test("un guardado fallido no deja huérfanos que el siguiente adopte", async () => {
+  const be = backendMemoria();
+  const b = crearBiblias(be);
+  await b.guardar(biblia("TLA", "uno"));
+  const put = be.put;
+  let n = 0;
+  be.put = async (k, v) => { if (++n === 2) throw new Error("falla"); return put(k, v); };
+  await assert.rejects(b.guardar(biblia("TLA", "fallida")));   // escribió el libro 1 de la gen 2 y falló
+  be.put = put;
+  await b.guardar({ sigla: "TLA", nombre: "N", derechos: "", libros: { 43: { 3: { 16: "solo jn" } } }, resumen: { libros: 1, versiculos: 1, agrupados: 0 } });
+  assert.equal(await b.capitulo("TLA", "GEN", 1), null, "Génesis no está en el archivo nuevo");
+});
+
+test("versiones() refleja enseguida un guardado nuevo (caché invalidada)", async () => {
+  const b = crearBiblias(backendMemoria());
+  await b.guardar(biblia("TLA"));
+  assert.deepEqual((await b.versiones()).map(v => v.sigla), ["TLA"]);
+  await b.guardar(biblia("RVR 1960"));
+  assert.deepEqual((await b.versiones()).map(v => v.sigla), ["TLA", "RVR 1960"]);
+  await b.quitar("TLA");
+  assert.deepEqual((await b.versiones()).map(v => v.sigla), ["RVR 1960"]);
+});
+

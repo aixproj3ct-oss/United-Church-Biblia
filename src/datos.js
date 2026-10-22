@@ -4,14 +4,13 @@ const CLAVE = "uc-biblia-v1";
 const MAX_HISTORIAL = 30;
 
 const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [],
-  config: { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null } });
+  config: { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null } });
 
 const LETRAS = ["normal", "grande", "muy-grande"];
 const TEMAS = ["claro", "oscuro"];
 const sanearConfig = c => {
   const o = c && typeof c === "object" ? c : {};
   return {
-    nombre: typeof o.nombre === "string" && o.nombre.trim() ? o.nombre : "pastor",
     letra: LETRAS.includes(o.letra) ? o.letra : "grande",
     ultimoRespaldo: typeof o.ultimoRespaldo === "string" ? o.ultimoRespaldo : null,
     tema: TEMAS.includes(o.tema) ? o.tema : "claro",
@@ -88,11 +87,9 @@ export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () =>
     },
     config: () => ({ ...e.config }),
     guardarConfig(parcial) { e.config = sanearConfig({ ...e.config, ...parcial }); guardar(); },
-    exportar() {
-      e.config.ultimoRespaldo = reloj().toISOString();
-      guardar();
-      return JSON.stringify({ ...e, exportado: e.config.ultimoRespaldo }, null, 1);
-    },
+    // La copia se arma sin marcar la fecha: se marca con marcarRespaldo() solo cuando compartir o descargar terminó.
+    exportar() { return JSON.stringify({ ...e, exportado: reloj().toISOString() }, null, 1); },
+    marcarRespaldo() { e.config.ultimoRespaldo = reloj().toISOString(); guardar(); },
     importar(texto) {
       let n;
       try { n = JSON.parse(texto); } catch { throw new Error("Archivo no válido"); }
@@ -105,6 +102,8 @@ export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () =>
       const descartados = antes - (n.domingos.length + n.favoritos.length + n.historial.length);
       n.historial = n.historial.slice(0, MAX_HISTORIAL);
       n.config = sanearConfig(n.config);
+      // Antes de reemplazar, se guarda una copia de lo actual por si la copia importada era vieja.
+      try { storage.setItem(`${CLAVE}-antes-import-${reloj().toISOString()}`, JSON.stringify(e)); } catch { /* sin espacio */ }
       e = n;
       guardar();
       return descartados;

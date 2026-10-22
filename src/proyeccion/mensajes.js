@@ -46,10 +46,12 @@ export function leer(texto) {
   try { return validar(JSON.parse(texto)); } catch { return null; }
 }
 
-// Acepta un mensaje solo si es más nuevo que el último aceptado del mismo origen (evita retrocesos al reconectar).
-export function crearOrden() {
+// Acepta un mensaje solo si es más nuevo que el último aceptado del mismo origen (evita retrocesos al reconectar)
+// y no viene más de 60 s del futuro (un reloj adelantado congelaría la pantalla hasta que la hora lo alcanzara).
+export function crearOrden(ahora = () => Date.now()) {
   const ultimo = {};
   return m => {
+    if (m.t > ahora() + 60000) return false;
     if (!(m.t > (ultimo[m.de] ?? -Infinity))) return false;
     ultimo[m.de] = m.t;
     return true;

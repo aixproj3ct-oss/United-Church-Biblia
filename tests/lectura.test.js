@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nuevaLectura, seguirProyeccion } from "../src/lectura.js";
+import { nuevaLectura, seguirProyeccion, seguirTrasAtras } from "../src/lectura.js";
 
 const ref = { codigo: "JHN", cap: 4, v1: null, v2: null };
 const cita = { codigo: "JHN.4", etiqueta: "Juan 4" };
@@ -43,3 +43,10 @@ test("seguirProyeccion: el plan del domingo se proyecta solo; una cita suelta no
   assert.equal(seguirProyeccion({ activo: true, seguir: true }, { navegando: true }), true);
   assert.equal(seguirProyeccion({ activo: true, seguir: false }, { navegando: true }), false);
 });
+
+test("seguirTrasAtras: Atrás solo sigue proyectando si vuelve al pasaje que está en pantalla (Review Focus 1)", () => {
+  assert.equal(seguirTrasAtras({ activo: true, enviado: "A|TLA|false" }, "B|TLA|false"), false);
+  assert.equal(seguirTrasAtras({ activo: true, enviado: "A|TLA|false" }, "A|TLA|false"), true);
+  assert.equal(seguirTrasAtras({ activo: false, enviado: "A|TLA|false" }, "A|TLA|false"), false);
+});
+

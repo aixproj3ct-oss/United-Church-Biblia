@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { crearAlmacen } from "../src/datos.js";
 
-const memoria = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
+const memoria = () => { const m = new Map(); return { _mapa: m, getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
 const cita = (codigo, etiqueta = codigo) => ({ codigo, etiqueta });
 
 test("domingos: guardar, ordenar, actual y borrar", () => {
@@ -43,15 +43,15 @@ test("historial: el más reciente primero, sin repetir, máximo 30", () => {
 test("persiste entre instancias y config por defecto", () => {
   const s = memoria();
   const a = crearAlmacen(s);
-  assert.deepEqual(a.config(), { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null });
+  assert.deepEqual(a.config(), { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null });
   a.guardarConfig({ nombre: "Pastor Luis" });
-  assert.equal(crearAlmacen(s).config().nombre, "Pastor Luis");
 });
 
 test("exportar e importar; importar inválido no borra nada", () => {
   const a = crearAlmacen(memoria(), () => new Date("2026-10-05T12:00:00Z"));
   a.agregarFavorito("Bodas", cita("1CO.13.4-7"));
   const copia = a.exportar();
+  a.marcarRespaldo();
   assert.equal(a.config().ultimoRespaldo, "2026-10-05T12:00:00.000Z");
   const b = crearAlmacen(memoria());
   b.importar(copia);
@@ -96,7 +96,6 @@ test("importar con config:{} usa valores por defecto", () => {
   const data = { version: 1, domingos: [], favoritos: [], historial: [], config: {} };
   a.importar(JSON.stringify(data));
   const cfg = a.config();
-  assert.equal(cfg.nombre, "pastor");
   assert.equal(cfg.letra, "grande");
   assert.equal(cfg.ultimoRespaldo, null);
 });
@@ -128,14 +127,14 @@ test("config se sanea al cargar: tipos inválidos y claves desconocidas", () => 
   m.setItem("uc-biblia-v1", JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: "  ", letra: "enorme", ultimoRespaldo: 5, extra: "x" } }));
   const cfg = crearAlmacen(m).config();
-  assert.deepEqual(cfg, { nombre: "pastor", letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null });
+  assert.deepEqual(cfg, { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null });
 });
 
 test("config se sanea al importar", () => {
   const a = crearAlmacen(memoria());
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: 42, letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", otro: 1 } }));
-  assert.deepEqual(a.config(), { nombre: "pastor", letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", tema: "claro", pantalla: null });
+  assert.deepEqual(a.config(), { letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", tema: "claro", pantalla: null });
 });
 
 test("crearAlmacen sin argumentos no lanza si localStorage falla o no existe", () => {
@@ -184,7 +183,7 @@ test("datos viejos con url de bible.com siguen siendo válidos (Review Focus 1)"
   const a = crearAlmacen(memoria());
   a.importar(JSON.stringify({ version: 1, domingos: [{ id: "d", fecha: "2026-10-05", titulo: "T", citas: [vieja] }],
     favoritos: [{ id: "f", serie: "S", cita: vieja }], historial: [{ cita: vieja, cuando: "2026-10-05T12:00:00Z" }],
-    config: { nombre: "pastor", letra: "grande", ultimoRespaldo: null, avisoYouVersion: true } }));
+    config: { letra: "grande", ultimoRespaldo: null, avisoYouVersion: true } }));
   assert.equal(a.domingos()[0].citas[0].codigo, "JHN.3.16");
   assert.equal(a.favoritos()[0].cita.etiqueta, "Juan 3:16");
   assert.equal(a.historial()[0].cita.codigo, "JHN.3.16");
@@ -218,3 +217,26 @@ test("pantalla: normaliza el código, rechaza lo inválido y viaja en la copia",
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: { pantalla: "UC-7K4P-9QX2" } }));
   assert.equal(a.config().pantalla, "UC-7K4P-9QX2");
 });
+
+test("exportar no marca el respaldo; marcarRespaldo sí", () => {
+  const a = crearAlmacen(memoria(), () => new Date("2026-10-22T10:00:00Z"));
+  a.exportar();
+  assert.equal(a.config().ultimoRespaldo, null);
+  a.marcarRespaldo();
+  assert.equal(a.config().ultimoRespaldo, "2026-10-22T10:00:00.000Z");
+});
+
+test("importar guarda antes una copia del estado actual y acepta copias viejas (Review Focus 4)", () => {
+  const m = memoria();
+  const a = crearAlmacen(m, () => new Date("2026-10-22T10:00:00Z"));
+  a.guardarDomingo({ fecha: "2026-10-25", titulo: "Actual", citas: [cita("JHN.3.16")] });
+  const vieja = { codigo: "PSA.23", etiqueta: "Salmo 23", url: "https://www.bible.com/bible/176/PSA.23.TLA" };
+  a.importar(JSON.stringify({ version: 1, domingos: [{ id: "x", fecha: "2026-10-05", titulo: "Viejo", citas: [vieja] }], favoritos: [], historial: [],
+    config: { nombre: "Pastor", letra: "grande", ultimoRespaldo: null } }));
+  assert.equal(a.domingos()[0].titulo, "Viejo");
+  const copia = [...m._mapa.keys()].find(k => k.startsWith("uc-biblia-v1-antes-import-"));
+  assert.ok(copia, "debe existir la copia previa");
+  assert.equal(JSON.parse(m.getItem(copia)).domingos[0].titulo, "Actual");
+  assert.equal("nombre" in a.config(), false);
+});
+
