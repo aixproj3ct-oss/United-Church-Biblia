@@ -60,7 +60,8 @@ export async function enviarBosquejo(canal, clave, b, { esperarConfirmacion = 80
 
 // Junta los trozos de cada envío (en cualquier orden, sin contar repetidos). Con todos, descifra, sanea y llama a
 // alBosquejo(b, envio) una sola vez. Lo cifrado con otro código o dañado se ignora sin error.
-// recibir devuelve una promesa que termina cuando alBosquejo terminó; si alBosquejo falla, esa promesa falla.
+// recibir devuelve una promesa que termina cuando alBosquejo terminó; si alBosquejo falla, esa promesa falla y el envío
+// puede reprocesarse cuando sus trozos lleguen otra vez.
 export function crearReceptor(clave, alBosquejo) {
   const pendientes = new Map(); // envio -> { total, partes: Map(n -> datos) }
   const hechos = new Set();
@@ -79,7 +80,9 @@ export function crearReceptor(clave, alBosquejo) {
       pendientes.delete(msg.envio);
       hechos.add(msg.envio);
       const b = sanearBosquejo(await descifrar(clave, Array.from({ length: e.total }, (_, i) => e.partes.get(i)).join("")));
-      if (b) await alBosquejo(b, msg.envio);
+      if (!b) return;
+      // Si alBosquejo falla (p. ej. la tablet no pudo guardar), el envío no queda como hecho: al volver a llegar se procesa de nuevo.
+      try { await alBosquejo(b, msg.envio); } catch (err) { hechos.delete(msg.envio); throw err; }
     },
   };
 }

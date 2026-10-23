@@ -8,8 +8,14 @@ const ITERACIONES = 150000;
 const aBase64 = bytes => { let s = ""; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
 const deBase64 = txt => Uint8Array.from(atob(txt), c => c.charCodeAt(0));
 
-// Mismo formato que temaDe, con otro prefijo: el tema del teléfono no es el de la pantalla.
-export const temaTelefono = codigo => "uc-bosq-" + codigo.replace(/^UC-/, "").replace(/-/g, "").toLowerCase();
+// Tema de ntfy del teléfono: sale de un hash del código, así el nombre del tema no revela el código
+// (con el código y la sal pública se podría derivar la clave). Código malo: mismo error que claveDe.
+export async function temaTelefono(codigo) {
+  const cod = normalizarCodigo(codigo);
+  if (!cod) throw new Error("Código no válido");
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(cod + "|uc-bosq-tema")));
+  return "uc-bosq-" + Array.from(hash.slice(0, 8), b => b.toString(16).padStart(2, "0")).join("");
+}
 
 // Clave AES-GCM de 256 bits derivada del código con PBKDF2 (SHA-256).
 export async function claveDe(codigo) {

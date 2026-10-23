@@ -35,9 +35,14 @@ const relojRapido = () => {
   return { plazos, setTimeout: (fn, ms) => { plazos.push(ms); return globalThis.setTimeout(fn, 0); }, clearTimeout: id => globalThis.clearTimeout(id) };
 };
 
-test("temaTelefono usa 8 caracteres en minúscula, igual que temaDe", () => {
-  assert.equal(temaTelefono(COD), "uc-bosq-abcd2345");
-  assert.notEqual(temaTelefono(COD), temaDe(COD));
+test("temaTelefono sale de un hash: no revela el código, es estable y distinto por código", async () => {
+  const tema = await temaTelefono(COD);
+  assert.match(tema, /^uc-bosq-[0-9a-f]{16}$/);
+  assert.ok(!tema.includes("abcd2345") && !tema.includes("abcd") && !tema.includes("2345"));
+  assert.equal(await temaTelefono("uc abcd 2345"), tema);
+  assert.notEqual(await temaTelefono(OTRO), tema);
+  assert.notEqual(tema, temaDe(COD));
+  await assert.rejects(temaTelefono("hola"), /Código no válido/);
 });
 
 test("claveDe rechaza un código que no es válido", async () => {
@@ -119,6 +124,24 @@ test("trozos desordenados o repetidos se juntan una sola vez", async () => {
   for (const m of ms) await rx.recibir(m); // un envío ya completo no vuelve a entregarse
   assert.equal(llegados.length, 1);
   assert.deepEqual(llegados[0][0], b);
+});
+
+test("si alBosquejo falla, el mismo envío se procesa de nuevo cuando sus trozos vuelven a llegar", async () => {
+  const b = ejemplo(4000);
+  const clave = await claveDe(COD);
+  const canal = canalFalso();
+  await enviarBosquejo(canal, clave, b, { ...relojRapido(), esperarConfirmacion: 1 });
+  let llamadas = 0;
+  const llegados = [];
+  const rx = crearReceptor(clave, x => { if (++llamadas === 1) throw new Error("no se pudo guardar"); llegados.push(x); });
+  const ms = canal.publicados;
+  for (const m of ms.slice(0, -1)) await rx.recibir(m);
+  await assert.rejects(rx.recibir(ms.at(-1)), /no se pudo guardar/);
+  for (const m of ms) await rx.recibir(m);
+  assert.equal(llamadas, 2);
+  assert.deepEqual(llegados, [b]);
+  for (const m of ms) await rx.recibir(m); // ya entregado: no se repite
+  assert.equal(llamadas, 2);
 });
 
 test("el receptor ignora, sin error, lo cifrado con otro código y lo que no es del teléfono", async () => {
