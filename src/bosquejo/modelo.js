@@ -15,12 +15,15 @@ const texto = (t, max) => (typeof t === "string" ? t.trim().slice(0, max) : "");
 // Una cita {codigo, etiqueta}: null si no hay, undefined si está mal formada. La etiqueta viene de parseCita y no se recalcula.
 const citaDe = c => (c === null || c === undefined ? null : validoCita(c) ? { codigo: c.codigo, etiqueta: c.etiqueta } : undefined);
 
-// Devuelve el bosquejo recortado y limpio, o null si no es válido (sin id, fecha que no existe,
-// 0 o más de 6 puntos, o una cita mal formada).
+// Devuelve el bosquejo recortado y limpio, o null si no es válido (sin id, fecha que no existe, título vacío,
+// 0 o más de 6 puntos, un punto sin frase, o una cita mal formada). El título y la frase de cada punto son obligatorios
+// porque la pantalla de la iglesia no acepta láminas sin ellos.
 export function sanearBosquejo(b) {
   if (!b || typeof b !== "object") return null;
   if (typeof b.id !== "string" || !b.id.trim() || !fechaReal(b.fecha)) return null;
   if (!Array.isArray(b.puntos) || b.puntos.length < 1 || b.puntos.length > MAX_PUNTOS) return null;
+  const titulo = texto(b.titulo, MAX.titulo);
+  if (!titulo) return null;
   const cita = citaDe(b.cita);
   if (cita === undefined) return null;
   const puntos = [];
@@ -29,12 +32,14 @@ export function sanearBosquejo(b) {
     const lista = Array.isArray(p.versos) ? p.versos : [];
     const versos = lista.slice(0, MAX_VERSOS).map(citaDe);
     if (versos.some(x => !x)) return null;
-    puntos.push({ frase: texto(p.frase, MAX.frase), versos,
+    const frase = texto(p.frase, MAX.frase);
+    if (!frase) return null;
+    puntos.push({ frase, versos,
       explicacion: texto(p.explicacion, MAX.nota), ilustracion: texto(p.ilustracion, MAX.nota) });
   }
   return {
     id: b.id.trim(), domingoId: typeof b.domingoId === "string" && b.domingoId ? b.domingoId : null, fecha: b.fecha,
-    titulo: texto(b.titulo, MAX.titulo), cita, intro: texto(b.intro, MAX.nota), puntos,
+    titulo, cita, intro: texto(b.intro, MAX.nota), puntos,
     aplicacion: texto(b.aplicacion, MAX.nota), recuerda: texto(b.recuerda, MAX.recuerda),
     conclusion: texto(b.conclusion, MAX.nota), actualizado: typeof b.actualizado === "string" ? b.actualizado : "",
   };

@@ -31,6 +31,11 @@ const lineasDe = txt => txt.split("\n").map(l => l.trim()).filter(Boolean);
 const okLi = etiqueta => `<li class="ok">✓ ${esc(etiqueta)}</li>`;
 const malLi = (linea, error) => `<li class="mal">✗ “${esc(linea)}”: ${esc(error)}</li>`;
 
+// ✗ de lo obligatorio: el título y la frase de cada punto (solo espacios cuenta como vacío).
+const faltaLi = msg => `<li class="mal">✗ ${esc(msg)}</li>`;
+const previstaTitulo = t => (t.trim() ? { html: "", malo: false } : { html: faltaLi("Escribe el título"), malo: true });
+const previstaFrase = t => (t.trim() ? { html: "", malo: false } : { html: faltaLi("Escribe la frase del punto"), malo: true });
+
 // ✓/✗ de la cita principal (una sola línea; vacía es válida).
 function previstaCita(txt) {
   const t = txt.trim();
@@ -58,12 +63,17 @@ function previstaVersos(txt) {
 // cita principal y de cada punto, y `malo` = hay algo con ✗ que impide guardar.
 export function revisarCrudo(crudo) {
   const c = normalizarCrudo(crudo, Infinity);
+  const titulo = previstaTitulo(c.titulo);
   const cita = previstaCita(c.cita);
-  const puntos = c.puntos.map(p => previstaVersos(p.versos));
+  const frases = c.puntos.map(p => previstaFrase(p.frase));
+  const puntos = c.puntos.map((p, i) => {
+    const v = previstaVersos(p.versos);
+    return { ...v, html: frases[i].html + v.html, malo: v.malo || frases[i].malo };
+  });
   const b = { id: "", domingoId: null, fecha: c.fecha, titulo: c.titulo, cita: cita.cita, intro: c.intro,
     puntos: c.puntos.map((p, i) => ({ frase: p.frase, versos: puntos[i].citas, explicacion: p.explicacion, ilustracion: p.ilustracion })),
     aplicacion: c.aplicacion, recuerda: c.recuerda, conclusion: c.conclusion, actualizado: "" };
-  return { b, malo: cita.malo || puntos.some(p => p.malo), cita: { html: cita.html, malo: cita.malo },
+  return { b, malo: titulo.malo || cita.malo || puntos.some(p => p.malo), titulo, cita: { html: cita.html, malo: cita.malo },
     puntos: puntos.map(p => ({ html: p.html, malo: p.malo })) };
 }
 
@@ -90,7 +100,7 @@ const area = (id, max, valor, extra = "") => `<textarea id="${id}" maxlength="${
 
 function htmlPunto(p, i, rev, quitar) {
   return `<fieldset class="punto" data-punto="${i}"><legend>Punto ${i + 1}</legend>
-    ${campo(`p${i}-frase`, "Frase del punto", true, entrada(`p${i}-frase`, MAX.frase, p.frase, 'class="p-frase"'))}
+    ${campo(`p${i}-frase`, "Frase del punto", true, entrada(`p${i}-frase`, MAX.frase, p.frase, `class="p-frase" aria-describedby="p${i}-prevista"`))}
     ${campo(`p${i}-versos`, "Versículos (uno por línea. Ejemplo: ef 2 8-9)", true,
       `<textarea id="p${i}-versos" class="p-versos" rows="3" spellcheck="false" autocorrect="off" autocapitalize="off" aria-describedby="p${i}-prevista">${esc(p.versos)}</textarea>`)}
     <ul id="p${i}-prevista" class="prevista" aria-live="polite">${rev.html}</ul>
@@ -108,7 +118,9 @@ export function vistaFormBosquejo(b, { maxPuntos = MAX_PUNTOS, crudo = null } = 
   return `<button type="button" class="enlace" data-bq-volver>‹ Volver a los bosquejos</button><h1>${b ? "Editar bosquejo" : "Nuevo bosquejo"}</h1>
     <form id="f-bosquejo" class="card form bq-form" novalidate>
       <section class="parte"><h2>1 · Título, fecha y cita principal</h2>
-        ${campo("b-titulo", "Título del sermón", true, entrada("b-titulo", MAX.titulo, c.titulo))}
+        ${campo("b-titulo", "Título del sermón", true,
+          entrada("b-titulo", MAX.titulo, c.titulo, 'aria-describedby="b-titulo-prevista"'))}
+        <ul id="b-titulo-prevista" class="prevista" aria-live="polite">${rev.titulo.html}</ul>
         ${campo("b-fecha", "Fecha del domingo", true, `<input type="date" id="b-fecha" required value="${esc(c.fecha)}">`)}
         ${campo("b-cita", "Cita principal (opcional. Ejemplo: ef 2 8-9)", true,
           entrada("b-cita", 80, c.cita, 'spellcheck="false" autocorrect="off" autocapitalize="off" aria-describedby="b-cita-prevista"'))}

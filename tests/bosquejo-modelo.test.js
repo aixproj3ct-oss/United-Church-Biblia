@@ -114,3 +114,11 @@ test("notasDe omite las vacías y no escapa (eso lo hace la vista)", () => {
   assert.deepEqual(notasDe(c, { tipo: "punto", p: 9, v: null }).partes, []);
   assert.equal(typeof notasDe(c, { tipo: "titulo" }).titulo, "string");
 });
+
+test("sanearBosquejo: el título y la frase de cada punto son obligatorios (solo espacios cuenta como vacío)", () => {
+  assert.equal(sanearBosquejo(ejemplo({ titulo: "" })), null);
+  assert.equal(sanearBosquejo(ejemplo({ titulo: "   " })), null);
+  assert.equal(sanearBosquejo(ejemplo({ puntos: [{ frase: "   ", versos: [] }] })), null);
+  assert.equal(sanearBosquejo(ejemplo({ puntos: [{ frase: "A", versos: [] }, { frase: "", versos: [] }] })), null);
+  assert.ok(sanearBosquejo(ejemplo({ puntos: [{ frase: "A", versos: [] }, { frase: "B", versos: [] }] })));
+});

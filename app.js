@@ -262,12 +262,13 @@ function leerFormBosquejo(form) {
   const { b } = revisarCrudo(crudoDeForm(form));
   return { ...b, id: bosquejoSel ?? "", domingoId: bosquejoActual()?.domingoId ?? null };
 }
-// Pone al día los ✓/✗ de la cita y de los versículos; con algún ✗ no se puede guardar.
+// Pone al día los ✓/✗ del título, la cita, las frases y los versículos; con algún ✗ no se puede guardar.
 function revisarFormBq() {
   const form = $("#f-bosquejo");
   if (!form) return null;
   const r = revisarCrudo(crudoDeForm(form));
   const poner = (ul, html) => { if (ul && ul.innerHTML !== html) ul.innerHTML = html; };
+  poner($("#b-titulo-prevista"), r.titulo.html);
   poner($("#b-cita-prevista"), r.cita.html);
   r.puntos.forEach((p, i) => poner($(`#p${i}-prevista`), p.html));
   $("#b-guardar").disabled = r.malo; $("#b-ayuda").hidden = !r.malo;

@@ -169,3 +169,21 @@ test("la lista vacía invita a escribir el primero", () => {
   assert.match(h, /Nuevo bosquejo/);
   assert.match(h, /Todavía no hay bosquejos/);
 });
+
+test("un título vacío o un punto sin frase se marcan con ✗ y bloquean el guardado", () => {
+  const base = bosquejoACrudo(ejemplo());
+  const sinTitulo = revisarCrudo({ ...base, titulo: "   " });
+  assert.equal(sinTitulo.malo, true);
+  assert.match(sinTitulo.titulo.html, /✗ Escribe el título/);
+  const sinFrase = revisarCrudo({ ...base, puntos: [{ frase: " ", versos: "ef 2 8", explicacion: "", ilustracion: "" }] });
+  assert.equal(sinFrase.malo, true);
+  assert.match(sinFrase.puntos[0].html, /✗ Escribe la frase del punto/);
+  assert.match(sinFrase.puntos[0].html, /✓ Efesios 2:8/);
+  const h = vistaFormBosquejo(null, { maxPuntos: 6 });
+  assert.match(h, /✗ Escribe el título/);
+  assert.match(h, /✗ Escribe la frase del punto/);
+  assert.match(h, /id="b-guardar"[^>]*disabled/);
+  assert.ok(!/opcional\)/.test(etiqueta(h, "b-titulo")));
+  assert.equal(revisarCrudo(base).malo, false);
+  assert.ok(!/Escribe el título/.test(vistaFormBosquejo(ejemplo(), { maxPuntos: 6 })));
+});
