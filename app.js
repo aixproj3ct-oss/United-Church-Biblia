@@ -10,6 +10,8 @@ import { normalizarCodigo } from "./src/proyeccion/mensajes.js";
 import { armarIndiceDesde, buscar, fichas, palabrasResaltar } from "./src/busqueda.js";
 import { proximoDomingo, fechaLarga, fechaCorta } from "./src/fechas.js";
 import { esc, aviso } from "./src/ui.js";
+import { citasDe, domingoParaBosquejo, MAX_PUNTOS } from "./src/bosquejo/modelo.js";
+import { vistaListaBosquejos, vistaFormBosquejo, revisarCrudo } from "./src/bosquejo/vistas.js";
 import { LETRAS } from "./src/datos.js";
 import { proy, iniciarLector, conectarPantalla, hayPantalla, sinRespuesta, soltarPantalla, vistaLector, pintarLector,
   sincronizarProyeccion, proyectarActual, reintentar, cambiarParte, quitarDePantalla, alVolver,
@@ -35,7 +37,7 @@ const dec = s => JSON.parse(decodeURIComponent(s));
 const ic = (id, extra = "") => `<svg class="ico" ${extra}><use href="#i-${id}"/></svg>`;
 const hoyISO = () => new Date().toLocaleDateString("en-CA");
 const citaDe = r => ({ codigo: r.codigoRef, etiqueta: r.etiqueta });
-const VISTAS = ["domingo", "biblia", "guardados", "config", "lector"];
+const VISTAS = ["domingo", "biblia", "bosquejo", "guardados", "config", "lector"];
 const vistaInicial = () => almacen.domingoActual(hoyISO()) ? "domingo" : "biblia";
 const vistaDeHash = () => { const h = location.hash.slice(1); return VISTAS.includes(h) && h !== "lector" ? h : vistaInicial(); };
 let vista = vistaDeHash(), favPendiente = null;
@@ -46,6 +48,8 @@ let editando = false, domingoSel = null, verDomingo = null;
 let lectura = null, libroSel = null, testamento = "at", pestana = "historial";
 // Búsqueda por texto: el índice se arma una vez (al primer uso) y se descarta si cambian las versiones.
 let indice = null, busqueda = null;
+// Bosquejo: la lista, o el formulario (editandoB: true; bosquejoSel: el que se edita, null = nuevo).
+let editandoB = false, bosquejoSel = null;
 
 const SIN_ESPACIO = "No se pudo guardar en la tablet: falta espacio";
 // Muestra msg solo si lo último quedó escrito en la tablet; si no, avisa que falta espacio (nunca dice "guardado").
@@ -233,6 +237,105 @@ function previstaDomingo() {
   const ay = $("#d-ayuda");
   ay.textContent = hayMal ? "Corrige las líneas marcadas con ✗" : "Escribe al menos una cita";
   ay.hidden = ls.length > 0 && !hayMal;
+}
+
+// ---------- Bosquejo ----------
+// Borrador del formulario del bosquejo: mismo patrón que el del domingo (sessionStorage mientras la pestaña siga abierta).
+const CLAVE_BORRADOR_BQ = "uc-borrador-bosquejo";
+let baseBq = null;   // lo que mostraba el formulario al abrirlo (para saber si hay cambios sin guardar)
+let guardandoBq = false;
+const leerBorradorBq = () => { try { return JSON.parse(sessionStorage.getItem(CLAVE_BORRADOR_BQ)); } catch { return null; } };
+const borrarBorradorBq = () => { try { sessionStorage.removeItem(CLAVE_BORRADOR_BQ); } catch { /* sin sessionStorage */ } };
+const bosquejoActual = () => (bosquejoSel ? almacen.bosquejos().find(x => x.id === bosquejoSel) ?? null : null);
+
+// Lo escrito en el formulario, todo como texto (la cita y los versículos todavía sin leer).
+function crudoDeForm(form = $("#f-bosquejo")) {
+  if (!form) return null;
+  const v = sel => form.querySelector(sel)?.value ?? "";
+  return { fecha: v("#b-fecha"), titulo: v("#b-titulo"), cita: v("#b-cita"), intro: v("#b-intro"),
+    puntos: [...form.querySelectorAll("[data-punto]")].map(p => ({ frase: p.querySelector(".p-frase").value, versos: p.querySelector(".p-versos").value,
+      explicacion: p.querySelector(".p-expl").value, ilustracion: p.querySelector(".p-ilus").value })),
+    aplicacion: v("#b-aplicacion"), recuerda: v("#b-recuerda"), conclusion: v("#b-conclusion") };
+}
+// El bosquejo que dice el formulario, sin sanear (el almacén lo sanea al guardar). Las líneas con ✗ no entran.
+function leerFormBosquejo(form) {
+  const { b } = revisarCrudo(crudoDeForm(form));
+  return { ...b, id: bosquejoSel ?? "", domingoId: bosquejoActual()?.domingoId ?? null };
+}
+// Pone al día los ✓/✗ de la cita y de los versículos; con algún ✗ no se puede guardar.
+function revisarFormBq() {
+  const form = $("#f-bosquejo");
+  if (!form) return null;
+  const r = revisarCrudo(crudoDeForm(form));
+  const poner = (ul, html) => { if (ul && ul.innerHTML !== html) ul.innerHTML = html; };
+  poner($("#b-cita-prevista"), r.cita.html);
+  r.puntos.forEach((p, i) => poner($(`#p${i}-prevista`), p.html));
+  $("#b-guardar").disabled = r.malo; $("#b-ayuda").hidden = !r.malo;
+  return r;
+}
+// Vuelve a dibujar el formulario con lo escrito (al agregar o quitar un punto, o al recuperar un borrador), sin tocar la base de cambios.
+function repintarFormBq(crudo) {
+  const y = $("#vista").scrollTop;
+  $("#vista").innerHTML = vistaFormBosquejo(bosquejoActual(), { maxPuntos: MAX_PUNTOS, crudo });
+  $("#vista").scrollTop = y; revisarFormBq();
+}
+const mismoCrudo = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function hayCambiosBq() {
+  const v = crudoDeForm();
+  return !!(v && baseBq && !mismoCrudo(v, baseBq));
+}
+function guardarBorradorBq() {
+  if (!hayCambiosBq()) return borrarBorradorBq();
+  try { sessionStorage.setItem(CLAVE_BORRADOR_BQ, JSON.stringify({ sel: bosquejoSel, crudo: crudoDeForm() })); } catch { /* sin sessionStorage */ }
+}
+// Antes de salir del formulario (otra sección, "Volver"): si hay cambios, pide confirmar.
+async function puedeSalirBosquejo() {
+  if (vista !== "bosquejo" || !editandoB || !hayCambiosBq()) return true;
+  if (!await confirmar("Tienes cambios sin guardar. ¿Salir sin guardar?", "Salir sin guardar", "Seguir editando")) return false;
+  borrarBorradorBq();
+  return true;
+}
+// Al abrir el formulario: si quedó un borrador de este mismo bosquejo, ofrece recuperarlo.
+async function ofrecerBorradorBq() {
+  const b = leerBorradorBq(), v = crudoDeForm();
+  if (!b || !v || !b.crudo || b.sel !== bosquejoSel) return;
+  if (mismoCrudo(b.crudo, v)) return borrarBorradorBq();
+  if (await confirmar("Tienes un borrador sin guardar de este bosquejo. ¿Quieres recuperarlo?", "Recuperar", "Descartar")) {
+    if (!$("#f-bosquejo")) return;
+    repintarFormBq(b.crudo); aviso("Borrador recuperado");
+  } else borrarBorradorBq();
+}
+
+function vistaBosquejo() {
+  if (!editandoB) return `${saludo()}${vistaListaBosquejos(almacen.bosquejos())}`;
+  const b = bosquejoActual();
+  if (!b) bosquejoSel = null; // el bosquejo ya no existe (p. ej. se restauró una copia): se trata como uno nuevo
+  return vistaFormBosquejo(b, { maxPuntos: MAX_PUNTOS });
+}
+
+// Guarda el bosquejo y deja el domingo de esa fecha con su título y sus citas (si ya tenía otras, antes pregunta).
+async function guardarBosquejoForm(form) {
+  if (guardandoBq) return;
+  const r = revisarFormBq();
+  if (!r || r.malo) return;
+  guardandoBq = true;
+  try {
+    const id = almacen.guardarBosquejo(leerFormBosquejo(form));
+    if (!id) return aviso("Ese bosquejo no se puede guardar: revisa la fecha y los puntos.", 6000);
+    bosquejoSel = id;
+    // Sin espacio: el formulario queda abierto con lo escrito (y el borrador) para reintentar; no se dice "guardado".
+    if (!almacen.persistido()) return aviso(`${SIN_ESPACIO}. Lo que escribiste sigue aquí.`, 8000);
+    const b = bosquejoActual();
+    const { domingo, conflicto } = domingoParaBosquejo(almacen.domingos(), b);
+    let citas = citasDe(b);
+    if (conflicto && !await confirmar("Las citas de ese domingo son distintas a las del bosquejo. ¿Reemplazarlas?", "Sí, reemplazar", "Dejar las del domingo")) citas = domingo.citas;
+    const domingoId = almacen.guardarDomingo({ id: domingo?.id, fecha: b.fecha, titulo: b.titulo || domingo?.titulo || "", citas });
+    if (!domingoId) aviso("El bosquejo se guardó, pero no se pudo actualizar el domingo.", 7000);
+    else almacen.guardarBosquejo({ ...b, domingoId });
+    if (!almacen.persistido()) return aviso(`${SIN_ESPACIO}. Lo que escribiste sigue aquí.`, 8000);
+    borrarBorradorBq(); editandoB = false; pintar(); $("#vista").scrollTop = 0;
+    if (domingoId) avisoGuardado("Bosquejo guardado");
+  } finally { guardandoBq = false; }
 }
 
 // ---------- Biblia y búsqueda ----------
@@ -443,9 +546,10 @@ function pintar() {
   aplicarTema();
   luzDelLector(vista === "lector"); // la tablet no se apaga mientras se lee
   document.body.classList.toggle("en-lector", vista === "lector");
-  $("#vista").innerHTML = { domingo: vistaDomingo, biblia: vistaBiblia, guardados: vistaGuardados, config: vistaConfig, lector: () => vistaLector(lectura) }[vista]();
+  $("#vista").innerHTML = { domingo: vistaDomingo, biblia: vistaBiblia, bosquejo: vistaBosquejo, guardados: vistaGuardados, config: vistaConfig, lector: () => vistaLector(lectura) }[vista]();
   document.querySelectorAll(".nav [data-ir]").forEach(b => b.classList.toggle("activa", b.dataset.ir === vista));
   if (vista === "domingo" && editando) { previstaDomingo(); baseEd = valoresEditor(); }
+  if (vista === "bosquejo" && editandoB) { revisarFormBq(); baseBq = crudoDeForm(); }
   if (vista === "biblia") pista();
   if (vista === "config") pintarVersiones();
   if (vista === "lector") repintarLector();
@@ -468,8 +572,9 @@ document.addEventListener("click", async ev => {
   if (!t) return;
   const d = t.dataset;
   if (d.ir) {
-    if (!await puedeSalirEditor()) return;
+    if (!await puedeSalirEditor() || !await puedeSalirBosquejo()) return;
     if (d.ir === "domingo") { editando = false; verDomingo = null; }
+    if (d.ir === "bosquejo") editandoB = false;
     ir(d.ir);
     // Al entrar a Biblia se escribe de una vez, salvo que ya haya resultados o un pasaje abierto en pantalla (no abrir el teclado).
     if (d.ir === "biblia" && !busqueda && !proy.activo) $("#q")?.focus();
@@ -552,6 +657,35 @@ document.addEventListener("click", async ev => {
     editando = true; domingoSel = d.editar || null; pintar(); $("#vista").scrollTop = 0;
     return ofrecerBorrador();
   }
+  if (d.bqAbrir !== undefined) {
+    editandoB = true; bosquejoSel = d.bqAbrir || null; pintar(); $("#vista").scrollTop = 0;
+    return ofrecerBorradorBq();
+  }
+  if (t.hasAttribute("data-bq-volver")) {
+    if (!await puedeSalirBosquejo()) return;
+    editandoB = false; pintar(); return ($("#vista").scrollTop = 0);
+  }
+  if (t.hasAttribute("data-bq-agregar")) {
+    const c = crudoDeForm();
+    if (!c || c.puntos.length >= MAX_PUNTOS) return;
+    c.puntos.push({ frase: "", versos: "", explicacion: "", ilustracion: "" });
+    repintarFormBq(c); guardarBorradorBq(); return $(`#p${c.puntos.length - 1}-frase`)?.focus();
+  }
+  if (d.bqQuitar !== undefined) {
+    const i = Number(d.bqQuitar), p = crudoDeForm()?.puntos[i];
+    if (!p || crudoDeForm().puntos.length < 2) return;
+    if ((p.frase + p.versos + p.explicacion + p.ilustracion).trim()
+      && !await confirmar(`¿Quitar el punto ${i + 1} con todo lo que escribiste en él?`, "Sí, quitar", "Cancelar")) return;
+    const c = crudoDeForm();
+    if (!c || c.puntos.length < 2) return;
+    c.puntos.splice(i, 1);
+    repintarFormBq(c); return guardarBorradorBq();
+  }
+  if (t.id === "b-borrar") {
+    if (!await confirmar("¿Borrar este bosquejo? El domingo no se toca.", "Sí, borrar", "Cancelar")) return;
+    almacen.borrarBosquejo(bosquejoSel); bosquejoSel = null; editandoB = false; borrarBorradorBq(); pintar(); $("#vista").scrollTop = 0;
+    return avisoGuardado("Bosquejo borrado");
+  }
   if (t.hasAttribute("data-plan")) {
     if (!await puedeSalirEditor()) return;
     editando = false; return pintar();
@@ -589,6 +723,7 @@ document.addEventListener("input", ev => {
   if (ev.target.id === "q") pista();
   if (ev.target.id === "d-citas") previstaDomingo();
   if (["d-fecha", "d-titulo", "d-citas"].includes(ev.target.id)) guardarBorradorEditor();
+  if (ev.target.closest?.("#f-bosquejo")) { revisarFormBq(); guardarBorradorBq(); }
 });
 
 document.addEventListener("submit", ev => {
@@ -612,6 +747,7 @@ document.addEventListener("submit", ev => {
     if (!almacen.persistido()) return aviso(`${SIN_ESPACIO}. Lo que escribiste sigue aquí.`, 8000);
     borrarBorrador(); editando = false; pintar(); aviso("Domingo guardado");
   }
+  if (f.id === "f-bosquejo") return guardarBosquejoForm(f);
   if (f.id === "f-pastor") {
     almacen.guardarConfig({ pastor: $("#c-pastor").value }); pintar();
     return avisoGuardado(almacen.config().pastor ? "Saludo guardado" : "Saludo borrado");
@@ -664,7 +800,7 @@ document.addEventListener("change", async ev => {
       inp.value = "";
       return aviso(e?.message === "Archivo no válido" ? "Ese archivo no es una copia válida de United Church" : "No se pudo restaurar la copia; tus datos siguen como estaban.", 7000);
     }
-    borrarBorrador(); editando = false;
+    borrarBorrador(); editando = false; borrarBorradorBq(); editandoB = false;
     try { pintar(); }
     catch (e) { console.error("Pintar tras restaurar:", e); inp.value = ""; return aviso("La copia se restauró, pero la pantalla no se pudo actualizar. Cierra y abre la app.", 8000); }
     const resto = n ? `${n} elementos dañados se omitieron. ` : "";

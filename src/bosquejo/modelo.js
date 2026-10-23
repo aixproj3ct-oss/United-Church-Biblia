@@ -6,7 +6,7 @@ import { fechaReal } from "../fechas.js";
 export const MAX_PUNTOS = 6;
 export const MAX_VERSOS = 6;
 // Largo máximo de cada texto.
-const MAX = { titulo: 120, frase: 160, recuerda: 200, nota: 4000 };
+export const MAX = { titulo: 120, frase: 160, recuerda: 200, nota: 4000 };
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
