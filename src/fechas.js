@@ -9,3 +9,4 @@ export function proximoDomingo(hoy = new Date()) {
 }
 
 export const fechaLarga = f => new Date(f + "T12:00").toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" });
+export const fechaCorta = f => new Date(f + "T12:00").toLocaleDateString("es", { day: "numeric", month: "long" });

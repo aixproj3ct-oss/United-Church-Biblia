@@ -1,7 +1,7 @@
 // Pantalla de proyección (PC de EasyWorship): recibe por ntfy lo que el pastor proyecta y lo dibuja
 // en una lámina 16:9 con la Biblia cargada en esta PC. El texto bíblico nunca viaja por la red.
 import { crearBiblias } from "../biblias.js";
-import { decodificar, importarBiblia, ErrorBiblia } from "../importar.js";
+import { cargarBiblia, ErrorBiblia } from "../importar.js";
 import { cargarPasaje, refDeCodigo, etiquetaRef } from "../pasaje.js";
 import { repartir, refDeParte } from "./partes.js";
 import { generarCodigo, temaDe, crearOrden, msgEstado, paraArrancar, crearRecargaDiferida } from "./mensajes.js";
@@ -38,12 +38,13 @@ const htmlBloques = bs => bs.map(b => `<span class="vers${b.sigla ? " relleno" :
 function repartirMidiendo(bloques, refBase, pie) {
   const mRef = $("#m-ref"), mPie = $("#m-pie"), med = $("#medida");
   let altoRef = 0;
-  mPie.textContent = pie;
+  mPie.textContent = `${pie} · 10 de 10`; // con lugar para el contador de partes
   mRef.textContent = etiquetaRef(refBase);
   const base = mRef.offsetHeight;
   // ¿Caben estos bloques a este tamaño en la caja, dejando lugar para la referencia y el pie?
   const cabe = (bs, tam) => {
-    const disponible = 1080 - 2 * 60 - Math.max(altoRef, mRef.offsetHeight) - 18 - mPie.offsetHeight - 30;
+    // Igual que proyeccion.css: caja de 96 arriba a 84 abajo, 33 bajo la referencia; el pie ya trae su espacio de 30.
+    const disponible = 1080 - 96 - 84 - Math.max(altoRef, mRef.offsetHeight) - 33 - mPie.offsetHeight;
     med.style.fontSize = tam + "px";
     med.innerHTML = htmlBloques(bs);
     return med.scrollHeight <= disponible;
@@ -54,16 +55,25 @@ function repartirMidiendo(bloques, refBase, pie) {
   return r;
 }
 
-function mostrarEspera() { $("#lamina").hidden = true; $("#espera").hidden = false; recarga.alEspera(); }
+// Vuelve a disparar el fundido suave de la lámina o de la espera.
+function entrar(el) { el.classList.remove("entra"); void el.offsetWidth; el.classList.add("entra"); }
+function verLamina() { $("#escenario").classList.remove("en-espera"); $("#espera").hidden = true; $("#lamina").hidden = false; entrar($("#lamina")); }
+function mostrarEspera() {
+  const ya = !$("#espera").hidden;
+  $("#lamina").hidden = true; $("#espera").hidden = false; $("#escenario").classList.add("en-espera");
+  if (!ya) entrar($("#espera"));
+  recarga.alEspera();
+}
 function mostrarMensaje(ref, texto) {
-  $("#espera").hidden = true; $("#lamina").hidden = false;
+  verLamina();
   $("#ref").textContent = ref; $("#pie").textContent = "";
   const t = $("#texto"); t.className = "texto aviso-texto"; t.style.fontSize = ""; t.textContent = texto;
 }
 function dibujar() {
-  const { refBase, partes, tam, parte } = actual;
-  $("#espera").hidden = true; $("#lamina").hidden = false;
+  const { refBase, partes, tam, parte, pie } = actual;
+  verLamina();
   $("#ref").textContent = partes.length > 1 ? refDeParte(refBase, partes[parte]) : etiquetaRef(refBase);
+  $("#pie").textContent = partes.length > 1 ? `${pie} · ${parte + 1} de ${partes.length}` : pie ?? "";
   const t = $("#texto"); t.className = "texto"; t.style.fontSize = tam + "px"; t.innerHTML = htmlBloques(partes[parte]);
 }
 // Le cuenta a la tablet qué hay en pantalla: código, partes, versión, si faltan versículos y si hubo un error.
@@ -87,7 +97,7 @@ async function prepararPasaje(m) {
   if (!r.bloques.length) return { actual: { ...base, refBase, partes: [[]], sinTexto }, aviso: [etiquetaRef(refBase), "Este pasaje no está en las Biblias cargadas"] };
   const pie = ms.find(v => v.sigla === sigla)?.nombre || sigla;
   const { tam, partes } = repartirMidiendo(r.bloques, refBase, pie);
-  return { actual: { ...base, refBase, partes, tam, sinTexto, parte: Math.min(m.parte, partes.length - 1) }, pie };
+  return { actual: { ...base, refBase, partes, tam, sinTexto, pie, parte: Math.min(m.parte, partes.length - 1) } };
 }
 
 async function mostrarPasaje(m) {
@@ -96,7 +106,7 @@ async function mostrarPasaje(m) {
   if (conf.rotar && p.actual.sigla && actual?.codigo !== m.codigo) { conf = guardarConf({ ...conf, fondo: conf.fondo % N_FONDOS + 1 }); pintarFondo(); }
   actual = p.actual;
   if (p.aviso) mostrarMensaje(...p.aviso);
-  else { $("#pie").textContent = p.pie; dibujar(); }
+  else dibujar();
   publicarEstado();
 }
 
@@ -207,15 +217,12 @@ document.addEventListener("change", async ev => {
   const archivo = ev.target.files[0];
   ev.target.value = "";
   try {
-    aviso("Leyendo la Biblia…", 60000);
-    const b = importarBiblia(decodificar(await archivo.arrayBuffer()));
-    if (!b.sigla) b.sigla = (prompt("¿Qué sigla le ponemos a esta versión? (por ejemplo TLA)") || "").trim().slice(0, 20);
-    if (!b.sigla) return aviso("Carga cancelada: falta la sigla");
-    if ((await biblias.versiones()).some(m => m.sigla === b.sigla) && !confirm(`Ya hay una versión ${b.sigla}. ¿Reemplazarla?`)) return aviso("Carga cancelada");
-    await biblias.guardar(b);
-    aviso(`${b.sigla}: ${b.resumen.libros} libros, ${b.resumen.versiculos.toLocaleString("es")} versículos`);
+    await cargarBiblia(archivo, biblias, { avisar: aviso, dispositivo: "esta PC",
+      pedirSigla: () => prompt("¿Qué sigla le ponemos a esta versión? (por ejemplo TLA)"),
+      confirmar: sigla => confirm(`Ya hay una versión ${sigla}. ¿Reemplazarla?`) });
   } catch (e) {
-    aviso(e instanceof ErrorBiblia ? e.message : "No se pudo guardar la Biblia (¿falta espacio?). La versión anterior sigue igual.", 8000);
+    console.error("Cargar Biblia:", e);
+    aviso(e instanceof ErrorBiblia ? e.message : "No se pudo cargar la Biblia.", e?.cancelada ? 3500 : 8000);
   }
   pintarPanel();
 });

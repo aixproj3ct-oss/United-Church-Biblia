@@ -5,6 +5,7 @@ import { seguirTrasAtras } from "./lectura.js";
 import { crearCanal } from "./proyeccion/canal.js";
 import { temaDe, msgPasaje, msgParte, msgEspera, msgConsulta } from "./proyeccion/mensajes.js";
 import { esc, aviso } from "./ui.js";
+import { LETRAS } from "./datos.js";
 
 const $ = s => document.querySelector(s);
 const enc = o => encodeURIComponent(JSON.stringify(o));
@@ -180,6 +181,31 @@ export async function quitarDePantalla() {
   soltarPantalla(); pintarBarra();
 }
 
+// ---------- Pantalla encendida mientras se lee ----------
+// Wake Lock: la tablet no se apaga con el lector abierto. El navegador lo suelta solo al ocultarse la app.
+let luz = null, luzQuiere = false, luzPidiendo = false;
+async function pedirLuz() {
+  if (!luzQuiere || luz || luzPidiendo || globalThis.document?.visibilityState === "hidden") return;
+  luzPidiendo = true;
+  try {
+    const l = await globalThis.navigator?.wakeLock?.request?.("screen");
+    if (!l) return;
+    if (!luzQuiere) return void l.release?.().catch?.(() => {}); // se salió del lector mientras se pedía
+    luz = l;
+    l.addEventListener?.("release", () => { if (luz === l) luz = null; });
+  } catch { /* sin permiso o sin soporte: no pasa nada */ }
+  finally { luzPidiendo = false; }
+}
+// activa=true en el lector, false al salir. Se puede llamar en cada pintado: no pide dos veces.
+export function luzDelLector(activa) {
+  luzQuiere = !!activa;
+  if (luzQuiere) return pedirLuz();
+  const l = luz; luz = null;
+  try { return Promise.resolve(l?.release?.()).catch(() => {}); } catch { return Promise.resolve(); }
+}
+// Al volver a la app (visibilitychange): si sigue en el lector, se vuelve a pedir.
+export const luzAlVolver = () => (luzQuiere ? pedirLuz() : undefined);
+
 // Al volver con Atrás: la pantalla sigue solo si se volvió justo al pasaje que tiene.
 export function alVolver(lectura) { proy.seguir = seguirTrasAtras(proy, claveDe(lectura, lectura.sigla ?? principal)); }
 
@@ -187,8 +213,11 @@ const titulo = l => l.completo && l.ref.v1 ? etiquetaRef({ ...l.ref, v1: null, v
 
 export function vistaLector(lectura) {
   return `<section class="lector"><header class="l-cab"><button class="ib" data-volver aria-label="Volver">${ic("izq")}</button>
-    <h1 class="ref">${esc(titulo(lectura))}</h1>
-    <button class="ib" data-buscar aria-label="Buscar">${ic("bus")}</button><span class="versiones" id="l-versiones"></span></header>
+    <h1 class="l-ref">${esc(titulo(lectura))}</h1>
+    <button class="ib" data-buscar aria-label="Buscar">${ic("bus")}</button>
+    <div class="l-herr"><span class="letra-g" role="group" aria-label="Tamaño de letra"><button data-letra-paso="-1" aria-label="Letra más chica">A−</button><button data-letra-paso="1" aria-label="Letra más grande">A+</button></span>
+      <button class="ib" data-tema-cambiar id="l-tema"></button>
+      <span class="versiones" id="l-versiones" role="group" aria-label="Versión"></span></div></header>
     <div class="l-cuerpo" id="l-cuerpo"><p class="meta">Abriendo…</p></div>
     <nav class="l-cap" id="l-cap"></nav>
     <footer class="barra" id="l-barra" hidden></footer></section>`;
@@ -223,20 +252,44 @@ async function dibujar(lectura) {
   if (mi !== gen || !cuerpo.isConnected) return;
   // Todo lo que hacía falta ya está calculado: recién ahora se anota qué versión se ve y se toca la pantalla.
   mostrada = { lectura, sigla: actual };
-  $("#l-versiones").innerHTML = versiones.map(m => `<button class="${m.sigla === actual ? "on" : ""}" data-version="${esc(m.sigla)}">${esc(m.sigla)}</button>`).join("");
+  $("#l-versiones").innerHTML = versiones.map(m => `<button class="${m.sigla === actual ? "on" : ""}" aria-pressed="${m.sigla === actual}" data-version="${esc(m.sigla)}">${esc(m.sigla)}</button>`).join("");
+  pintarHerramientas();
   const texto = r.bloques.map(b => `<span class="vers${b.sigla ? " relleno" : ""}"><b class="num">${esc(b.etiqueta)}</b>${esc(b.texto)}${b.sigla ? ` <small class="de">${esc(b.sigla)}</small>` : ""}</span>`).join(" ");
   const relleno = r.rellenoDe.length ? `<p class="aviso-relleno">Este pasaje no está en tu archivo ${esc(actual)}; se muestra en ${esc(r.rellenoDe.join(" y "))}</p>` : "";
   const falta = r.vacio ? `<p class="meta">Este capítulo no está en las Biblias cargadas.</p>`
     : r.sinTexto.length ? `<p class="meta">${r.bloques.length ? `Versículo${r.sinTexto.length > 1 ? "s" : ""} ${esc(r.sinTexto.join(", "))}: ` : ""}Este versículo no está en las Biblias cargadas.</p>` : "";
   cuerpo.innerHTML = `<div class="l-texto">${relleno}<p class="texto-biblia" lang="es">${texto}</p>${falta}</div>`;
   const vers = !lectura.completo;
-  $("#l-cap").innerHTML = `<button class="cap" ${antes ? `data-capitulo="${enc(antes)}"` : "disabled"}>‹ Capítulo</button>
-    ${vers ? `<button class="vers-b" ${vAnt ? `data-versiculo="${enc(vAnt)}"` : "disabled"}>‹ Versículo anterior</button>` : ""}
-    ${v1 ? `<button data-completo>${lectura.completo ? "Ver solo el pasaje" : "Ver capítulo completo"}</button>` : ""}
-    ${vers ? `<button class="vers-b" ${vSig ? `data-versiculo="${enc(vSig)}"` : "disabled"}>Versículo siguiente ›</button>` : ""}
-    <button class="cap" ${despues ? `data-capitulo="${enc(despues)}"` : "disabled"}>Capítulo ›</button>
-    <button class="estrella" data-fav="${enc(lectura.cita)}" aria-label="Guardar en favoritos">${ic("est")}</button>`;
+  // Izquierda: versículo anterior, capítulo completo y siguiente. Derecha: capítulo ‹ › y favoritos.
+  const izq = [
+    vers && `<button ${vAnt ? `data-versiculo="${enc(vAnt)}"` : "disabled"}>‹ Versículo anterior</button>`,
+    v1 && `<button data-completo>${lectura.completo ? "Ver solo el pasaje" : "Ver capítulo completo"}</button>`,
+    vers && `<button ${vSig ? `data-versiculo="${enc(vSig)}"` : "disabled"}>Versículo siguiente ›</button>`,
+  ].filter(Boolean).join("");
+  $("#l-cap").innerHTML = `<div class="l-vers">${izq}</div><div class="l-capg"><span class="eti-cap">Capítulo</span>
+    <button class="ib" ${antes ? `data-capitulo="${enc(antes)}"` : "disabled"} aria-label="Capítulo anterior">${ic("izq")}</button>
+    <button class="ib" ${despues ? `data-capitulo="${enc(despues)}"` : "disabled"} aria-label="Capítulo siguiente">${ic("der")}</button>
+    <button class="ib estrella" data-fav="${enc(lectura.cita)}" aria-label="Guardar en favoritos">${ic("est")}</button></div>`;
   pintarBarra();
+}
+
+// A− / A+ y el botón de tema del encabezado, según Configuración (se repinta sin volver a dibujar el texto).
+export function pintarHerramientas() {
+  const c = almacen?.config(), i = LETRAS.indexOf(c?.letra), tema = $("#l-tema");
+  const [menos, mas] = document.querySelectorAll?.("[data-letra-paso]") ?? [];
+  if (menos) menos.disabled = i <= 0;
+  if (mas) mas.disabled = i >= LETRAS.length - 1;
+  if (!tema) return;
+  const oscuro = c?.tema === "oscuro";
+  tema.setAttribute?.("aria-label", oscuro ? "Modo claro" : "Modo oscuro");
+  tema.innerHTML = ic(oscuro ? "sol" : "luna");
+}
+
+// Lo que tiene la pantalla de la iglesia, en una línea: "Juan 3:16-17 · RVR 1960".
+function lineaPantalla() {
+  const r = refDeCodigo(proy.codigo);
+  if (!r) return "";
+  return `${etiquetaRef(proy.completo ? { ...r, v1: null, v2: null } : r)}${proy.sigla ? ` · ${proy.sigla}` : ""}`;
 }
 
 function planDe(lectura) {
@@ -251,26 +304,29 @@ export function pintarBarra() {
   const lectura = mostrada.lectura, plan = planDe(lectura);
   const enEsta = proy.activo && lectura && claveDe(lectura, mostrada.sigla) === proy.enviado;
   const quedan = enEsta && proy.parte < proy.partes - 1;
-  const partes = enEsta && proy.partes > 1 ?`<div class="grupo partes">
+  // Tres zonas: el texto que está en pantalla (partes), el plan del domingo y qué tiene la pantalla de la iglesia.
+  const partes = enEsta && proy.partes > 1 ? `<div class="zona partes"><span class="z-eti">Texto en pantalla</span><div class="z-fila">
       <button class="btn" data-parte="-1" ${proy.parte <= 0 ? "disabled" : ""} aria-label="Texto anterior">${ic("izq")}</button>
-      <span class="cnt">${proy.parte + 1}/${proy.partes}</span>
-      <button class="btn ${quedan ? "hay-mas" : ""}" data-parte="1" ${quedan ? "" : "disabled"}>Más texto${ic("der")}</button></div>` : "";
+      <span class="cnt">${proy.parte + 1} de ${proy.partes}</span>
+      <button class="btn ${quedan ? "hay-mas" : ""}" data-parte="1" ${quedan ? "" : "disabled"}>Más texto${ic("der")}</button></div></div>` : "";
   let planHTML = "";
   if (plan) {
     const { d, i } = plan, n = d.citas.length, sig = d.citas[i + 1];
-    planHTML = `<div class="grupo plan-g">${i > 0 ? `<button class="btn" data-dom-paso="-1" aria-label="Cita anterior">${ic("izq")}</button>` : ""}
-      <span class="plan"><b>Cita ${i + 1} de ${n}</b><br>${sig ? `sigue ${esc(sig.etiqueta)}` : "última del plan"}</span>
-      ${sig ? `<button class="btn ${quedan ? "" : "hay-mas"}" data-dom-paso="1">Siguiente cita${ic("der")}</button>` : ""}</div>`;
+    planHTML = `<div class="zona plan-g">${i > 0 ? `<button class="btn" data-dom-paso="-1">${ic("izq")}Cita ${i}</button>` : ""}
+      <span class="plan"><b>Cita ${i + 1} de ${n}</b><small>${sig ? `sigue ${esc(sig.etiqueta)}` : "última del plan"}</small></span>
+      ${sig ? `<button class="btn ${quedan ? "marino" : "hay-mas"}" data-dom-paso="1">Siguiente cita${ic("der")}</button>` : ""}</div>`;
   }
-  // "En pantalla" solo si lo que se lee es lo proyectado; con otra cita abierta se ofrece Proyectar (y Quitar).
+  const quitar = proy.activo ? `<button class="btn peli quitar" data-quitar-pantalla>Quitar</button>` : "";
+  const enPantalla = proy.activo ? `<span class="que">${esc(lineaPantalla())}</span>` : "";
+  // "En pantalla" solo si lo que se lee es lo proyectado; con otra cita abierta se dice qué hay y se ofrece Proyectar (y Quitar).
   let der = "";
   if (proy.fallo || enEsta) {
     const e = estadoEnvio(), mal = e.tipo === "sin" || e.tipo === "error";
-    der = `<div class="der"><span class="estado ${mal ? "mal" : e.tipo === "enviando" ? "envio" : ""}"><i></i>${esc(e.texto)}</span>
-      ${mal ? `<button class="btn" data-reintentar>Reintentar</button>` : ""}
-      ${proy.activo ? `<button class="btn peli quitar" data-quitar-pantalla>Quitar</button>` : ""}</div>`;
-  } else if (canal && lectura) der = `<div class="der"><button class="btn pri" data-proyectar>${ic("pant")}Proyectar</button>
-    ${proy.activo ? `<button class="btn peli quitar" data-quitar-pantalla>Quitar</button>` : ""}</div>`;
+    const texto = e.tipo === "ok" && !proy.sinTexto ? "En pantalla ahora" : e.texto;
+    der = `<div class="zona der"><span class="estado-z"><span class="estado ${mal ? "mal" : e.tipo === "enviando" ? "envio" : ""}"><i></i>${esc(texto)}</span>${enPantalla}</span>
+      ${mal ? `<button class="btn" data-reintentar>Reintentar</button>` : ""}${quitar}</div>`;
+  } else if (canal && lectura) der = `<div class="zona der">${proy.activo ? `<span class="estado-z"><span class="estado otra"><i></i>${proy.confirmado ? "En pantalla ahora" : "Enviado a la pantalla"}</span>${enPantalla}</span>` : ""}
+    <button class="btn pri" data-proyectar>${ic("pant")}Proyectar</button>${quitar}</div>`;
   b.hidden = !(partes || planHTML || der);
   b.innerHTML = partes + planHTML + der;
 }

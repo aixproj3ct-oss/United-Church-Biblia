@@ -2,6 +2,8 @@
 // No usa DOMParser para correr igual en el navegador y en Node. El texto se queda en la tablet.
 import { LIBROS } from "./libros.js";
 export class ErrorBiblia extends Error {}
+// El usuario canceló (sin sigla, o no quiso reemplazar): no es un fallo, pero se avisa con el mismo mensaje.
+export class CargaCancelada extends ErrorBiblia { cancelada = true; }
 
 const MIN_VERSOS_CON_TEXTO = 1000;
 // Una Biblia en XML pesa unos 5-10 MB; más de esto casi seguro no es una Biblia.
@@ -102,4 +104,36 @@ export function importarBiblia(xml) {
   }
   return { sigla: datos.sigla.slice(0, 20), nombre: datos.nombre, derechos: datos.derechos, libros,
     resumen: { libros: Object.keys(libros).length, versiculos, agrupados }, advertencias: advertencias(libros) };
+}
+
+// Carga una Biblia desde un archivo elegido: lee, decodifica, importa, pide la sigla si falta, confirma si ya
+// existe y guarda. Devuelve { sigla, resumen, advertencias, mensaje } (y avisa ese mensaje al terminar) o lanza
+// ErrorBiblia con un mensaje en español listo para mostrar (CargaCancelada si el usuario canceló).
+//   pedirSigla(): texto (o null) | confirmar(sigla): true/false | avisar(texto, ms) | invalidar(): tras intentar guardar
+//   dispositivo: cómo se llama el equipo en los mensajes ("la tablet", "esta PC").
+export async function cargarBiblia(archivo, biblias, { pedirSigla, confirmar, avisar, invalidar, dispositivo = "la tablet" } = {}) {
+  verificarTamano(archivo.size);
+  avisar?.("Leyendo la Biblia…", 60000);
+  let b;
+  try { b = importarBiblia(decodificar(await archivo.arrayBuffer())); }
+  catch (e) { throw e instanceof ErrorBiblia ? e : new ErrorBiblia("No se pudo leer el archivo. Vuelve a elegirlo.", { cause: e }); }
+  if (!b.sigla) b.sigla = String((await pedirSigla?.()) ?? "").trim().slice(0, 20);
+  if (!b.sigla) throw new CargaCancelada("Carga cancelada: falta la sigla");
+  const { sigla } = b;
+  try {
+    const ya = (await biblias.versiones()).some(m => m.sigla === sigla);
+    if (ya && !(await confirmar?.(sigla))) throw new CargaCancelada("Carga cancelada");
+    avisar?.(`Guardando en ${dispositivo}…`, 60000);
+    try { await biblias.guardar(b); } finally { invalidar?.(); }
+  } catch (e) {
+    if (e instanceof CargaCancelada) throw e;
+    throw e?.guardada
+      ? Object.assign(new ErrorBiblia(`${sigla} se guardó, pero no se pudo borrar la versión anterior: sigue ocupando espacio en ${dispositivo}.`, { cause: e }), { guardada: true })
+      : new ErrorBiblia(`No se pudo guardar la Biblia (¿falta espacio en ${dispositivo}?). La versión anterior sigue igual.`, { cause: e });
+  }
+  const r = b.resumen, av = b.advertencias ?? [];
+  const resumen = `${sigla}: ${r.libros} libros, ${r.versiculos.toLocaleString("es")} versículos${r.agrupados ? ` (${r.agrupados.toLocaleString("es")} agrupados)` : ""}`;
+  const mensaje = av.length ? `${resumen}. Atención: ${av.join(". ")}` : resumen;
+  avisar?.(mensaje, av.length ? 15000 : 8000);
+  return { sigla, resumen, advertencias: av, mensaje };
 }

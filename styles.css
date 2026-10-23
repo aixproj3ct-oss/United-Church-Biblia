@@ -1,13 +1,19 @@
 /* United Church — diseño 2026-10-22: marino y dorado, Montserrat + Playfair itálica (como la lámina proyectada). */
 :root{--m1:#07122b;--m2:#1c3f8a;--oro:#d4a64a;--oro-t:#8a6410;--oro-f:#fbf3df;--oro-b:#ecd9a8;--ambar:#f5a524;
-  --tinta:#0f1729;--sub:#566176;--fondo:#f4f5f8;--card:#fff;--linea:#c3cad8;--suave:#e6e9f0;--azul:#1d4ed8;--ok:#15803d;--mal:#b91c1c;
+  --tinta:#0f1729;--sub:#566176;--fondo:#f4f5f8;--card:#fff;--linea:#c3cad8;--borde-control:#7d889e;--suave:#e6e9f0;--azul:#1d4ed8;--ok:#15803d;--mal:#b91c1c;
   --r1:12px;--r2:20px;--base:19px}
 html[data-letra="normal"]{--base:17px}html[data-letra="grande"]{--base:19px}html[data-letra="muy-grande"]{--base:23px}
-html[data-tema="oscuro"]{--tinta:#eef2f8;--sub:#a5afc0;--fondo:#05080f;--card:#10151f;--linea:#4b5563;--suave:#1b2333;--oro-t:#f0cd7c;--oro-f:#2a2210;--oro-b:#5c4a18;--azul:#7aa2ff;color-scheme:dark}
+html[data-tema="oscuro"]{--tinta:#eef2f8;--sub:#a5afc0;--fondo:#05080f;--card:#10151f;--linea:#4b5563;--borde-control:#6b7585;--mal:#f87171;--suave:#1b2333;--oro-t:#f0cd7c;--oro-f:#2a2210;--oro-b:#5c4a18;--azul:#7aa2ff;color-scheme:dark}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;font:500 17px/1.4 Montserrat,system-ui,sans-serif;color:var(--tinta);background:var(--fondo);display:grid;grid-template-columns:250px 1fr;overflow:hidden}
 button{font:inherit;cursor:pointer;color:inherit}
+html,body{overscroll-behavior-y:contain}
+/* Respuesta al toque: sin destello gris, sin doble toque para ampliar y un leve hundimiento al pulsar */
+button,[data-ir]{-webkit-tap-highlight-color:transparent;touch-action:manipulation;transition:transform 120ms}
+button:active,[data-ir]:active{transform:scale(.97)}
+.cita:active,.res:active,.domingo-mini:active,.fila .abrir:active{transform:scale(.985)}
+button:disabled:active,button[disabled]:active{transform:none}
 .ico{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .ref{font-family:"Playfair Display",Georgia,serif;font-style:italic;font-weight:500}
 /* Panel lateral: azul marino en degradado de dos tonos */
@@ -20,20 +26,20 @@ button{font:inherit;cursor:pointer;color:inherit}
 .nav button.activa::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:4px;border-radius:4px;background:var(--oro)}
 .nav button.activa .ico{color:var(--oro)}
 .pie-nav{margin-top:auto}
-.principal{overflow-y:auto;padding:26px 30px 40px}
+.principal{overflow-y:auto;overscroll-behavior-y:contain;padding:26px 30px 40px}
 /* Componentes */
 h1{font-size:26px;margin:0 0 14px;font-weight:600}
 .eti{font-size:13px;color:var(--sub);font-weight:600;letter-spacing:.04em}
 .meta{color:var(--sub);font-size:15px}
 .card{background:var(--card);border:1px solid var(--linea);border-radius:var(--r2)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border-radius:var(--r1);font:600 17px Montserrat,sans-serif;padding:0 20px;min-height:52px;border:1px solid var(--linea);background:var(--card);color:var(--tinta);white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border-radius:var(--r1);font:600 17px Montserrat,sans-serif;padding:0 20px;min-height:52px;border:1px solid var(--borde-control);background:var(--card);color:var(--tinta);white-space:nowrap}
 .btn.pri{background:linear-gradient(180deg,#1f4bb8,#173a8f);border-color:#173a8f;color:#fff;box-shadow:0 6px 18px rgba(23,58,143,.3)}
-.btn.peli{color:var(--mal);border-color:#e9a8a8;background:transparent}
+.btn.peli{color:var(--mal);border-color:var(--mal);background:transparent}
 .btn[disabled]{opacity:.45;cursor:default}
 .btn.peq{min-height:44px;font-size:15px;padding:0 14px}
 .acciones{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .pestanas{display:flex;gap:6px;margin:4px 0 12px;flex-wrap:wrap}
-.pestanas button{padding:9px 18px;border-radius:999px;font-size:15px;border:1px solid var(--linea);background:var(--card);font-weight:600;min-height:44px}
+.pestanas button{padding:9px 18px;border-radius:999px;font-size:15px;border:1px solid var(--borde-control);background:var(--card);font-weight:600;min-height:44px}
 .pestanas button.on{background:var(--m2);color:#fff;border-color:var(--m2)}
 .vacio{color:var(--sub);padding:18px 4px}
 .pill{font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--oro-f);color:var(--oro-t)}
@@ -41,39 +47,66 @@ h1{font-size:26px;margin:0 0 14px;font-weight:600}
 html[data-tema="oscuro"] .pill.ok{background:#12301e;color:#86efac}html[data-tema="oscuro"] .pill.mal{background:#3a1212;color:#fca5a5}
 /* Domingo */
 .cab-dom{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.cab-dom .ref{font-size:30px;color:var(--oro-t);display:block;margin-top:2px}
+.cab-dom .ref{font-size:36px;color:var(--m1);display:block;margin-top:4px}
+html[data-tema="oscuro"] .cab-dom .ref{color:var(--tinta)}
 .citas{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:10px}
-.cita{display:flex;align-items:center;gap:16px;padding:12px 18px;min-height:66px;width:100%;text-align:left;border:1px solid var(--linea);border-radius:var(--r2);background:var(--card)}
+.cita{display:flex;align-items:center;gap:16px;padding:12px 18px;min-height:66px;width:100%;text-align:left;border:1px solid var(--borde-control);border-radius:var(--r2);background:var(--card)}
 .num-c{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:600;background:var(--oro-f);color:var(--oro-t);border:1px solid var(--oro-b);flex:none}
 .cita b{font-size:19px;display:block}.cita small{color:var(--sub);font-size:14px}
 .cita .ico{margin-left:auto;color:var(--sub)}
 .enlace{border:0;background:none;color:var(--sub);font-weight:600;font-size:14px;padding:12px 0;min-height:44px}
+.btn.ambar{background:var(--ambar);border-color:var(--ambar);color:#1d1300;font-weight:700}
+.btn.ambar .ico{fill:#1d1300;stroke:none;width:18px;height:18px}
+.btn.marino{background:var(--m1);border-color:var(--m1);color:#fff}
+html[data-tema="oscuro"] .btn.marino{background:var(--m2);border-color:var(--m2)}
+.eti.oro{color:var(--oro-t);letter-spacing:.08em}
+.dom-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:24px;align-items:start}
+.dom-plan .acciones{margin-top:6px}
+.dom-plan .enlace{display:inline-flex;align-items:center;gap:8px;font-size:16px;color:var(--m2)}
+html[data-tema="oscuro"] .dom-plan .enlace{color:var(--azul)}
+.dom-plan .enlace .ico{width:18px;height:18px}
+.cita.leida{color:var(--sub)}.cita.leida b{font-weight:600}
+.cita.leida .num-c{background:var(--suave);border-color:var(--suave);color:var(--ok)}
+.cita.leida .num-c .ico{width:18px;height:18px;stroke-width:3;margin:0}
+.cita.actual{border:3px solid var(--oro);background:var(--oro-f);min-height:72px}
+.cita.actual b{font-size:20px;font-weight:700}
+.cita.actual .num-c{background:var(--m1);border-color:var(--m1);color:#fff}
+.marca-c{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--sub);white-space:nowrap}
+.marca-c i{width:10px;height:10px;border-radius:50%;background:#22c55e}
+.cita.actual .marca-c{color:var(--ok);font-weight:700}
+.dom-ant{padding:18px;display:flex;flex-direction:column;gap:12px}
+.dom-ant h2{margin:0;font-size:18px;font-weight:700}
+.dom-ant .meta{margin:0;font-size:14px;line-height:1.45}
+.dom-ant .vacio{padding:4px 0}
+.ant{display:flex;align-items:center;gap:10px;border:1px solid var(--suave);border-radius:var(--r1);padding:10px 12px}
+.ant.sel{border-color:var(--m2);box-shadow:0 0 0 1px var(--m2) inset}
+.ant span{flex:1;min-width:0}.ant b{display:block;font-size:15px}.ant small{color:var(--sub);font-size:14px}
 .domingos-lista{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 16px}
-.domingo-mini{border:1px solid var(--linea);border-radius:var(--r1);background:var(--card);padding:10px 14px;text-align:left;min-height:56px}
+.domingo-mini{border:1px solid var(--borde-control);border-radius:var(--r1);background:var(--card);padding:10px 14px;text-align:left;min-height:56px}
 .domingo-mini.sel{border-color:var(--m2);box-shadow:0 0 0 2px var(--m2) inset}
 .form{display:grid;gap:12px;padding:18px 20px}
 .form label{display:grid;gap:6px;color:var(--sub);font-size:15px}
-.form input,.form select,.form textarea,#fav-nueva,.campo{font:inherit;font-size:17px;border:1px solid var(--linea);border-radius:var(--r1);padding:12px 14px;min-height:50px;color:var(--tinta);background:var(--card)}
+.form input,.form select,.form textarea,#fav-nueva,#sigla-campo,.campo{font:inherit;font-size:17px;border:1px solid var(--borde-control);border-radius:var(--r1);padding:12px 14px;min-height:50px;color:var(--tinta);background:var(--card)}
 .form textarea{min-height:170px;resize:vertical}
 .prevista{list-style:none;margin:0;padding:0}.prevista li{padding:4px 0}.prevista .ok{color:var(--ok)}.prevista .mal{color:var(--mal)}
 /* Biblia y búsqueda */
-#f-buscar{display:flex;align-items:center;gap:12px;padding:8px 8px 8px 18px;border-radius:var(--r2);background:var(--card);border:1px solid var(--linea);box-shadow:0 10px 28px rgba(15,23,41,.08)}
+#f-buscar{display:flex;align-items:center;gap:12px;padding:8px 8px 8px 18px;border-radius:var(--r2);background:var(--card);border:1px solid var(--borde-control);box-shadow:0 10px 28px rgba(15,23,41,.08)}
 #f-buscar:focus-within{outline:3px solid var(--azul);outline-offset:2px}
 #q{flex:1;min-width:0;border:0;outline:0;font:inherit;font-size:20px;background:transparent;color:var(--tinta)}
 .pista{min-height:28px;margin:10px 4px 0;color:var(--sub);display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:15px}
 .pista b{color:var(--tinta)}.pista .mal{color:var(--mal)}
-.sugerencia{border:1px solid var(--linea);background:var(--card);border-radius:var(--r1);padding:6px 14px;min-height:44px}
+.sugerencia{border:1px solid var(--borde-control);background:var(--card);border-radius:var(--r1);padding:6px 14px;min-height:44px}
 .libros{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .caps{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px}
-.libros button,.caps button{padding:12px 8px;border-radius:var(--r1);background:var(--card);border:1px solid var(--linea);font-size:15px;min-height:52px}
+.libros button,.caps button{padding:12px 8px;border-radius:var(--r1);background:var(--card);border:1px solid var(--borde-control);font-size:15px;min-height:52px}
 .resultados{margin-top:12px;display:grid;gap:8px}
-.res{display:flex;gap:16px;align-items:flex-start;padding:12px 18px;width:100%;text-align:left;border:1px solid var(--linea);border-radius:var(--r2);background:var(--card)}
+.res{display:flex;gap:16px;align-items:flex-start;padding:12px 18px;width:100%;text-align:left;border:1px solid var(--borde-control);border-radius:var(--r2);background:var(--card)}
 .res .ref{font-size:21px;color:var(--oro-t);min-width:170px}
 .res .t{display:block;font-size:16px;line-height:1.45}
-.res mark{background:var(--oro-f);color:inherit;border-radius:4px;padding:0 2px}
+.res mark{background:var(--oro-b);color:inherit;border-radius:4px;padding:0 2px;text-decoration:underline var(--oro) 2px;text-underline-offset:3px}
 .res small{display:block;margin-top:4px;font-size:12.5px;color:var(--sub);font-weight:600;letter-spacing:.04em}
 .modo{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;font-size:14px;color:var(--sub)}
-.modo button{padding:6px 12px;border-radius:999px;border:1px solid var(--linea);background:var(--card);font-weight:600;min-height:40px}
+.modo button{padding:6px 12px;border-radius:999px;border:1px solid var(--borde-control);background:var(--card);font-weight:600;min-height:40px}
 .modo button.on{background:var(--oro-f);border-color:var(--oro-b);color:var(--oro-t)}
 /* Guardados */
 .fila{display:flex;align-items:center;gap:14px;padding:6px 10px 6px 16px;border-bottom:1px solid var(--suave)}
@@ -86,7 +119,7 @@ html[data-tema="oscuro"] .pill.ok{background:#12301e;color:#86efac}html[data-tem
 /* Configuración */
 .cfg{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .cfg .card{padding:16px 18px}.cfg h2{margin:0 0 10px;font-size:15px;color:var(--sub);font-weight:600}
-.seg{display:inline-flex;padding:4px;border-radius:999px;border:1px solid var(--linea);background:var(--fondo)}
+.seg{display:inline-flex;padding:4px;border-radius:999px;border:1px solid var(--borde-control);background:var(--fondo)}
 .seg button{padding:8px 16px;border-radius:999px;font-size:15px;font-weight:600;color:var(--sub);border:0;background:none;min-height:40px}
 .seg button.on{background:var(--m2);color:#fff}
 .lin{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--suave);font-size:16px;flex-wrap:wrap}
@@ -96,59 +129,83 @@ html[data-tema="oscuro"] .pill.ok{background:#12301e;color:#86efac}html[data-tem
 body.en-lector{grid-template-columns:1fr}
 body.en-lector .lateral{display:none}
 body.en-lector .principal{padding:0;overflow:hidden}
-.lector{display:flex;flex-direction:column;height:100%}
-.l-cab{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--linea);background:var(--card)}
-.l-cab h1{flex:1;margin:0;font-size:28px;line-height:1.15}
-.ib{width:48px;height:48px;border-radius:var(--r1);display:grid;place-items:center;border:1px solid var(--linea);background:var(--card);flex:none}
-.versiones{display:inline-flex;padding:4px;border-radius:999px;border:1.5px solid var(--oro);background:var(--card);flex:none}
-.versiones button{padding:0 16px;height:40px;border:0;border-radius:999px;font-weight:600;font-size:16px;color:var(--sub);background:none}
-.versiones button.on{background:var(--oro);color:#1d1300}
-.l-cuerpo{flex:1;overflow-y:auto;padding:18px 34px 20px;display:flex;flex-direction:column}
+.lector{display:flex;flex-direction:column;height:100%;overscroll-behavior-y:contain}
+.l-cab{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--linea);background:var(--card);flex-wrap:wrap;min-height:76px}
+/* La cita de arriba en Montserrat recta (no itálica): se lee de un vistazo */
+.l-cab h1{flex:1;min-width:0;margin:0;font:700 28px/1.15 Montserrat,sans-serif;letter-spacing:-.01em}
+.ib{width:48px;height:48px;border-radius:var(--r1);display:grid;place-items:center;border:1px solid var(--borde-control);background:var(--card);flex:none}
+.l-herr{display:flex;align-items:center;gap:12px}
+.letra-g{display:flex;border:1px solid var(--borde-control);border-radius:var(--r1);overflow:hidden;flex:none}
+.letra-g button{width:52px;height:46px;border:0;background:var(--card);font-weight:600;font-size:17px}
+.letra-g button+button{border-left:1px solid var(--linea);font-size:21px;font-weight:700}
+.letra-g button:disabled{opacity:.35;cursor:default}
+.versiones{display:inline-flex;padding:3px;border-radius:999px;background:var(--suave);flex:none}
+.versiones button{padding:0 18px;height:44px;border:0;border-radius:999px;font-weight:600;font-size:16px;color:var(--sub);background:none}
+.versiones button.on{background:var(--m1);color:#fff}
+html[data-tema="oscuro"] .versiones button.on{background:var(--m2)}
+.l-cuerpo{flex:1;overflow-y:auto;overscroll-behavior-y:contain;padding:24px 40px;display:flex;flex-direction:column}
 /* Centrado: un versículo corto queda en medio de la pantalla; un pasaje largo llena el ancho y se desplaza. */
 .l-texto{margin:auto;width:fit-content;max-width:min(100%,1100px)}
-.texto-biblia{font-size:calc(var(--base) * 1.25);line-height:1.7;text-align:justify;hyphens:manual;-webkit-hyphens:manual;overflow-wrap:normal;margin:0 0 18px}
-.texto-biblia .num{color:var(--azul);font-weight:600;font-size:1.05em;margin-right:.25em}
+.texto-biblia{font-size:calc(var(--base) * 1.25);line-height:1.62;text-align:justify;hyphens:manual;-webkit-hyphens:manual;overflow-wrap:normal;margin:0 0 18px}
+/* Números de versículo en dorado y más grandes que el texto, sobre la línea, para encontrarlos rápido */
+.texto-biblia .num{color:var(--oro-t);font-weight:700;font-size:1.18em;line-height:1;margin-right:.3em}
+.texto-biblia .vers+.vers .num{margin-left:.15em}
 .texto-biblia .relleno{background:var(--oro-f);border-radius:6px;box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:0 .15em}
 .texto-biblia .de{font-size:.7em;color:var(--oro-t);font-weight:700}
 .aviso-relleno{background:var(--oro-f);border:1px solid var(--oro-b);border-radius:14px;padding:12px 16px;color:var(--oro-t)}
-.l-cap{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border-top:1px solid var(--linea);background:var(--card)}
+/* Navegación del pasaje: versículos a la izquierda, capítulo y favoritos a la derecha */
+.l-cap{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 20px;border-top:1px solid var(--suave)}
 .l-cap:empty{display:none}
-.l-cap button:not(.estrella){padding:8px 14px;border-radius:999px;border:1px solid var(--linea);background:var(--card);font-size:14px;color:var(--sub);min-height:44px}
-.l-cap .vers-b{font-size:16px!important;font-weight:600;color:var(--tinta)!important;border-color:var(--m2)!important;padding:8px 18px!important;min-height:48px!important}
-.l-cap button[disabled]{opacity:.4}
-/* Barra fija del lector */
-.barra{background:linear-gradient(90deg,var(--m1),#0e2457 55%,var(--m2));color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 -8px 24px rgba(0,0,0,.18)}
-.barra[hidden]{display:none}
-.barra .grupo{display:flex;align-items:center;gap:10px}
-.barra .btn{min-height:50px;font-size:16px;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff}
-.barra .btn.pri{background:var(--ambar);border-color:var(--ambar);color:#1d1300;box-shadow:none}
-.barra .btn.peli{color:#fecaca;border-color:rgba(254,202,202,.5);background:transparent}
-.barra .cnt{font-weight:600;min-width:46px;text-align:center}
-.barra .plan{font-size:14px;color:#c8d3ee;line-height:1.25}.barra .plan b{color:#fff;font-size:15px}
-.barra .der{margin-left:auto;display:flex;align-items:center;gap:14px}
-.barra .partes{order:1}.barra .plan-g{order:2}.barra .der{order:3}
-.barra .partes+.plan-g{border-left:1px solid rgba(255,255,255,.18);padding-left:12px}
-.barra .btn[disabled]{opacity:.4}
+.l-vers{display:flex;gap:10px}.l-vers:empty{display:none}
+.l-vers button{min-height:48px;padding:0 16px;border:1px solid var(--borde-control);border-radius:var(--r1);background:var(--card);font-weight:600;font-size:15px}
+.l-capg{display:flex;align-items:center;gap:10px;margin-left:auto}
+.eti-cap{font-weight:600;font-size:14px;color:var(--sub)}
+.l-cap button[disabled]{opacity:.4;cursor:default}
 .l-cap .estrella{color:var(--oro-t)}
-.estado{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:15px}
-.estado i{width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.25)}
-.estado.mal i{background:#ef4444;box-shadow:0 0 0 4px rgba(239,68,68,.25)}
-.estado.envio i{background:var(--ambar);box-shadow:0 0 0 4px rgba(245,165,36,.25)}
-.barra .quitar{margin-left:18px}
-button.hay-mas{background:var(--ambar)!important;border-color:var(--ambar)!important;color:#1d1300!important;animation:latido 1.6s ease-in-out infinite}
+/* Barra fija del lector: tres zonas (texto en pantalla · plan del domingo · lo que ve la iglesia) */
+.barra{background:var(--card);border-top:2px solid var(--linea);display:flex;align-items:stretch;flex-wrap:wrap;box-shadow:0 -8px 24px rgba(15,23,41,.08)}
+.barra[hidden]{display:none}
+.barra .zona{display:flex;align-items:center;gap:10px;padding:12px 18px;min-height:96px}
+.barra .zona+.zona{border-left:1px solid var(--linea)}
+.barra .partes{flex-direction:column;align-items:flex-start;justify-content:center;gap:4px}
+.z-eti{font-size:12px;font-weight:600;color:var(--sub);letter-spacing:.06em;text-transform:uppercase}
+.z-fila{display:flex;align-items:center;gap:8px}
+.barra .btn{min-height:48px;font-size:15px;padding:0 16px}
+.barra .btn.pri{background:var(--ambar);border-color:var(--ambar);color:#1d1300;box-shadow:none;font-weight:700}
+.barra .btn.peli{border-width:2px;font-weight:700}
+.barra .btn[disabled]{opacity:.4}
+.barra .cnt{font-weight:700;font-size:16px;min-width:56px;text-align:center}
+.barra .plan-g{flex:1;min-width:0;gap:14px}
+.barra .plan{flex:1;text-align:center;line-height:1.35}.barra .plan b{display:block;font-size:16px}.barra .plan small{display:block;color:var(--sub);font-size:14px}
+.barra .der{margin-left:auto;gap:12px}
+.estado-z{display:flex;flex-direction:column;gap:2px;min-width:0;margin-right:6px}
+.estado-z .que{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.estado{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:15px;color:var(--ok)}
+.estado i{width:11px;height:11px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.25)}
+.estado.mal{color:var(--mal)}.estado.mal i{background:#ef4444;box-shadow:0 0 0 4px rgba(239,68,68,.25)}
+.estado.envio{color:var(--oro-t)}.estado.envio i{background:var(--ambar);box-shadow:0 0 0 4px rgba(245,165,36,.25)}
+.estado.otra{color:var(--sub)}.estado.otra i{background:var(--sub);box-shadow:none}
+html[data-tema="oscuro"] .estado{color:#86efac}html[data-tema="oscuro"] .estado.mal{color:var(--mal)}
+html[data-tema="oscuro"] .estado.envio{color:var(--oro-t)}html[data-tema="oscuro"] .estado.otra{color:var(--sub)}
+button.hay-mas{background:var(--ambar)!important;border-color:var(--ambar)!important;color:#1d1300!important;animation:latido 1.6s ease-in-out 3}
 @keyframes latido{0%,100%{box-shadow:0 0 0 0 rgba(245,165,36,.55)}50%{box-shadow:0 0 0 7px rgba(245,165,36,0)}}
 /* Diálogo, avisos */
 dialog{border:0;border-radius:var(--r2);padding:24px;width:min(520px,92vw);background:var(--card);color:var(--tinta);box-shadow:0 30px 80px rgba(15,23,42,.35)}
 dialog::backdrop{background:rgba(7,18,43,.5)}
 dialog h3{margin:0 0 4px}dialog .sub{margin:0 0 6px;color:var(--sub)}
-#fav-nueva{width:100%;margin:6px 0 4px}
+#fav-nueva,#sigla-campo{width:100%;margin:6px 0 4px}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-.chip{border:1px solid var(--linea);background:var(--card);border-radius:var(--r1);padding:8px 14px;min-height:44px}
+.chip{border:1px solid var(--borde-control);background:var(--card);border-radius:var(--r1);padding:8px 14px;min-height:44px}
 .chip.sel{background:var(--m2);color:#fff;border-color:var(--m2)}
 .acciones-dlg{flex-direction:row-reverse}
-.aviso{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--tinta);color:var(--fondo);padding:14px 22px;border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.3);z-index:10;max-width:90vw;font-weight:600}
+.aviso{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 84px);transform:translateX(-50%);pointer-events:none;background:var(--tinta);color:var(--fondo);padding:14px 22px;border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.3);z-index:10;max-width:90vw;font-weight:600}
 .actualizar{position:fixed;top:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--linea);border-radius:999px;padding:6px 6px 6px 18px;box-shadow:0 10px 30px rgba(0,0,0,.2);z-index:11;font-weight:600}
-.actualizar[hidden]{display:none}.actualizar .btn{min-height:42px}
+.actualizar[hidden]{display:none}.actualizar .btn{min-height:48px}
+@media (prefers-reduced-motion:reduce){
+  button,[data-ir]{transition:none}
+  button:active,[data-ir]:active,.cita:active,.res:active,.domingo-mini:active,.fila .abrir:active{transform:none;opacity:.8}
+  button.hay-mas{animation:none}
+}
 /* Vertical y pantallas angostas */
 @media (max-width:900px){
   body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
@@ -159,8 +216,20 @@ dialog h3{margin:0 0 4px}dialog .sub{margin:0 0 6px;color:var(--sub)}
   .pie-nav{margin:0 0 0 auto}
   .cfg{grid-template-columns:1fr}
   .principal{padding:18px 18px 40px}
-  .l-cuerpo{padding:16px 20px}
-  .barra .plan-g{order:4;flex-basis:100%;border:0!important;padding:0!important}
-  .barra .plan-g .btn:last-child{margin-left:auto}
+  .l-cuerpo{padding:24px 34px}
+  .l-cab{padding:12px 18px}
+  .l-cab h1{font-size:27px}
+  .l-herr{flex-basis:100%}
+  .l-herr .versiones{order:-1;margin-right:auto}
+  .l-vers{flex-basis:100%;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr)}
+  .l-vers button{min-height:50px;padding:0 8px}
+  .l-capg{flex-basis:100%;margin:0}
+  .l-capg .estrella{margin-left:auto}
+  .dom-grid{grid-template-columns:1fr}
+  body.en-lector{grid-template-rows:1fr}
+  /* En vertical: arriba lo que ve la iglesia; abajo el texto en pantalla y el plan */
+  .barra .der{order:-1;flex-basis:100%;min-height:0;border-left:0!important;border-bottom:1px solid var(--suave)}
+  .barra .der .estado-z{flex:1}
+  .barra .zona{min-height:0}
   .res{flex-direction:column;gap:4px}.res .ref{min-width:0}
 }

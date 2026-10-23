@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseCita, ordenBiblico } from "../src/citas.js";
+import { etiquetaRef, codigoRef, numeroLibro } from "../src/pasaje.js";
+import { LIBROS } from "../src/libros.js";
 
 const OK = [
   ["jn 3 16", "Juan 3:16", "JHN.3.16"], ["jn 3:16", "Juan 3:16", "JHN.3.16"], ["jn 3.16", "Juan 3:16", "JHN.3.16"],
@@ -93,4 +95,24 @@ test("ordenBiblico sigue el orden canónico", () => {
   const cs = ["GEN.1.1", "EXO.1", "JHN.3.16", "JHN.3.17", "REV.22"];
   for (let i = 1; i < cs.length; i++) assert.ok(ordenBiblico(cs[i - 1]) < ordenBiblico(cs[i]), cs[i]);
   assert.ok(ordenBiblico("1CO.13.4-7") < ordenBiblico("2CO.1"));
+});
+
+test("parseCita usa la misma regla de pasaje.js para la etiqueta y el código (Salmo incluido)", () => {
+  for (const [codigo, , , alias] of LIBROS)
+    for (const resto of ["1", "1 1", "1 1-2"]) {
+      const r = parseCita(`${alias[0]} ${resto}`);
+      if (!r.ok) continue;     // libros de un solo capítulo piden otra forma; se cubren abajo
+      assert.equal(r.ref.codigo, codigo);
+      assert.equal(r.etiqueta, etiquetaRef(r.ref));
+      assert.equal(r.codigoRef, codigoRef(r.ref));
+    }
+  assert.equal(parseCita("sal 23 1").etiqueta, "Salmo 23:1");
+  assert.equal(parseCita("jud 5").etiqueta, etiquetaRef(parseCita("jud 5").ref));
+});
+
+test("ordenBiblico usa el número de libro de pasaje.js; un libro desconocido va al final", () => {
+  for (const [codigo] of LIBROS) assert.equal(Math.floor(ordenBiblico(`${codigo}.1.1`) / 1e6), numeroLibro(codigo));
+  assert.equal(ordenBiblico("XXX.1.1"), 999 * 1e6 + 1000 + 1);
+  assert.ok(ordenBiblico("MAL.4") < ordenBiblico("XXX.1"));
+  assert.equal(ordenBiblico(""), 999e6);
 });

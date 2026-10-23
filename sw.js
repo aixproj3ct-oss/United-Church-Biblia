@@ -1,6 +1,6 @@
 // Guarda la app para que abra al instante; cada vez que hay conexión trae la versión nueva para la próxima apertura.
 // Los fondos de la lámina no se precachean: solo los usa la PC de la iglesia y se guardan la primera vez que se ven.
-const VERSION = "uc-v18";
+const VERSION = "uc-v20";
 const ARCHIVOS = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest",
   "src/citas.js", "src/libros.js", "src/datos.js", "src/importar.js", "src/pasaje.js", "src/biblias.js", "src/lectura.js",
   "src/busqueda.js", "src/fechas.js", "src/ui.js", "src/lector.js",
@@ -8,7 +8,7 @@ const ARCHIVOS = ["./", "index.html", "styles.css", "app.js", "manifest.webmanif
   "proyeccion.html", "proyeccion.css",
   "assets/fuentes/fuentes.css", "assets/fuentes/Montserrat-500-latin.woff2", "assets/fuentes/Montserrat-500-latin-ext.woff2",
   "assets/fuentes/PlayfairDisplay-500i-latin.woff2", "assets/fuentes/PlayfairDisplay-500i-latin-ext.woff2",
-  "assets/icono-192.png", "assets/icono-maskable-512.png"];
+  "assets/icono-192.png", "assets/icono-maskable-512.png", "assets/proyeccion/logo-espera.webp"];
 
 // cache:"reload" evita que la instalación tome copias viejas de la caché HTTP (GitHub Pages las guarda 10 minutos).
 self.addEventListener("install", e => {

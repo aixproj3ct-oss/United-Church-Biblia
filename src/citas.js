@@ -2,6 +2,7 @@
 // en una referencia validada que abre el lector de la app.
 // Nunca abre un pasaje distinto del que muestra en `etiqueta`: ante cualquier duda devuelve un error.
 import { LIBROS } from "./libros.js";
+import { etiquetaRef, codigoRef, numeroLibro } from "./pasaje.js";
 
 const VERSICULO_MAX = 176;      // el versículo más largo de la Biblia (Salmo 119:176)
 
@@ -98,15 +99,11 @@ export function parseCita(texto) {
     if (n.v2 === n.v1) n.v2 = null;
   }
   const ref = { codigo: libro.codigo, nombre: libro.nombre, cap: n.cap, v1: n.v1, v2: n.v2 };
-  const nombreVisible = libro.codigo === "PSA" ? "Salmo" : libro.nombre;
-  const etiqueta = `${nombreVisible} ${n.cap}` + (n.v1 ? `:${n.v1}` + (n.v2 ? `-${n.v2}` : "") : "");
-  const codigoRef = `${libro.codigo}.${n.cap}` + (n.v1 ? `.${n.v1}` + (n.v2 ? `-${n.v2}` : "") : "");
-  return { ok: true, ref, etiqueta, codigoRef, corregido };
+  return { ok: true, ref, etiqueta: etiquetaRef(ref), codigoRef: codigoRef(ref), corregido };
 }
 
 // Número ordenable según el orden canónico: libro, capítulo, versículo ("1CO.13.4-7").
 export function ordenBiblico(codigo) {
   const [cod, cap, v] = String(codigo).split(".");
-  const i = LISTA.findIndex(l => l.codigo === cod);
-  return (i < 0 ? 999 : i + 1) * 1e6 + (parseInt(cap, 10) || 0) * 1000 + (parseInt(v, 10) || 0);
+  return (numeroLibro(cod) || 999) * 1e6 + (parseInt(cap, 10) || 0) * 1000 + (parseInt(v, 10) || 0);
 }

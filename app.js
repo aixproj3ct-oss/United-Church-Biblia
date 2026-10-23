@@ -2,16 +2,18 @@
 import { parseCita, ordenBiblico } from "./src/citas.js";
 import { crearAlmacen } from "./src/datos.js";
 import { crearBiblias } from "./src/biblias.js";
-import { decodificar, importarBiblia, ErrorBiblia, verificarTamano } from "./src/importar.js";
+import { cargarBiblia, ErrorBiblia } from "./src/importar.js";
 import { refDeCodigo, etiquetaRef, codigoRef, abreviatura } from "./src/pasaje.js";
 import { LIBROS } from "./src/libros.js";
 import { nuevaLectura, seguirProyeccion } from "./src/lectura.js";
 import { normalizarCodigo } from "./src/proyeccion/mensajes.js";
-import { crearIndice, buscar, fichas, palabrasResaltar } from "./src/busqueda.js";
-import { proximoDomingo, fechaLarga } from "./src/fechas.js";
+import { armarIndiceDesde, buscar, fichas, palabrasResaltar } from "./src/busqueda.js";
+import { proximoDomingo, fechaLarga, fechaCorta } from "./src/fechas.js";
 import { esc, aviso } from "./src/ui.js";
+import { LETRAS } from "./src/datos.js";
 import { proy, iniciarLector, conectarPantalla, hayPantalla, sinRespuesta, soltarPantalla, vistaLector, pintarLector,
-  sincronizarProyeccion, proyectarActual, reintentar, cambiarParte, quitarDePantalla, alVolver } from "./src/lector.js";
+  sincronizarProyeccion, proyectarActual, reintentar, cambiarParte, quitarDePantalla, alVolver,
+  luzDelLector, luzAlVolver, pintarHerramientas } from "./src/lector.js";
 
 // Si algo falla sin que nadie lo atrape, el pastor ve un aviso corto (sin detalles) y el detalle queda en la consola.
 let ultimoFallo = 0;
@@ -38,7 +40,8 @@ const vistaInicial = () => almacen.domingoActual(hoyISO()) ? "domingo" : "biblia
 const vistaDeHash = () => { const h = location.hash.slice(1); return VISTAS.includes(h) && h !== "lector" ? h : vistaInicial(); };
 let vista = vistaDeHash(), favPendiente = null;
 // Domingo: el plan vigente o la lista con el editor (editando: true; domingoSel: el que se edita, null = nuevo).
-let editando = false, domingoSel = null;
+// verDomingo: un domingo anterior abierto solo para consultar (null = el vigente).
+let editando = false, domingoSel = null, verDomingo = null;
 // Lo que muestra el lector: la cita, si se ve el capítulo completo y qué versión (null = la principal).
 let lectura = null, libroSel = null, testamento = "at", pestana = "historial";
 // Búsqueda por texto: el índice se arma una vez (al primer uso) y se descarta si cambian las versiones.
@@ -60,6 +63,18 @@ function confirmar(texto, si, no) {
     $("#conf-texto").textContent = texto; $("#conf-si").textContent = si; $("#conf-no").textContent = no;
     dlg.returnValue = "no";
     const fin = () => { dlg.removeEventListener("close", fin); res(dlg.returnValue === "si"); };
+    dlg.addEventListener("close", fin);
+    dlg.showModal();
+  });
+}
+
+// Pide la sigla de una Biblia con el diálogo propio (no el prompt() del navegador). Devuelve "" si se cancela.
+function pedirSigla() {
+  return new Promise(res => {
+    const dlg = $("#dlg-sigla"), campo = $("#sigla-campo");
+    if (dlg.open) return res("");
+    campo.value = ""; dlg.returnValue = "cancelar";
+    const fin = () => { dlg.removeEventListener("close", fin); res(dlg.returnValue === "ok" ? campo.value.trim().slice(0, 20) : ""); };
     dlg.addEventListener("close", fin);
     dlg.showModal();
   });
@@ -110,6 +125,7 @@ function abrir(cita, { completo = false, navegando = false, domingo = null, sigl
   if (!ref) return aviso("No pude abrir esa cita");
   proy.seguir = seguirProyeccion(proy, { navegando, domingo });
   almacen.registrarHistorial({ codigo: cita.codigo, etiqueta: cita.etiqueta });
+  if (domingo) marcarSermon(domingo);
   const r = nuevaLectura(lectura, { codigo: cita.codigo, etiqueta: cita.etiqueta }, ref, { completo, navegando, domingo });
   lectura = r.lectura;
   if (sigla) lectura.sigla = sigla;
@@ -124,20 +140,54 @@ function abrirCapitulo(codigo, cap) {
 }
 
 // ---------- Domingo ----------
+// Por dónde va el sermón: la cita que se lee ahora y las ya abiertas (solo referencias, en esta tablet).
+const CLAVE_SERMON = "uc-sermon";
+function leerSermon() {
+  try {
+    const s = JSON.parse(localStorage.getItem(CLAVE_SERMON));
+    return s && typeof s.id === "string" && Number.isInteger(s.i) && Array.isArray(s.vistas) ? s : null;
+  } catch { return null; }
+}
+function marcarSermon({ id, i }) {
+  const s = leerSermon(), antes = s?.id === id ? s.vistas.filter(Number.isInteger) : [];
+  try { localStorage.setItem(CLAVE_SERMON, JSON.stringify({ id, i, vistas: [...new Set([...antes, i])] })); } catch { /* sin espacio: solo se pierde la marca */ }
+}
+
 function vistaDomingo() {
   if (editando) return vistaEditor();
-  const d = almacen.domingoActual(hoyISO());
+  const vigente = almacen.domingoActual(hoyISO());
+  const consulta = verDomingo ? almacen.domingos().find(x => x.id === verDomingo && x.id !== vigente?.id) ?? null : null;
+  const d = consulta ?? vigente;
   if (!d) return `<h1>Domingo</h1><div class="card form"><h2>Aún no hay un domingo preparado</h2>
     <p class="meta">Anota las citas del sermón y aquí aparecerán como botones, listas para proyectar.</p>
     <div><button class="btn pri" data-editar="">${ic("edit")}Preparar el domingo</button></div></div>`;
-  const etiqueta = d.fecha === hoyISO() ? "HOY" : d.fecha > hoyISO() ? "PRÓXIMO DOMINGO" : "ÚLTIMO DOMINGO";
-  return `<div class="cab-dom"><div><div class="eti">${etiqueta} · ${esc(fechaLarga(d.fecha).toUpperCase())}</div>
-      <span class="ref">${esc(d.titulo || "Sin título")}</span></div>
-    <div class="acciones" style="margin:0"><button class="btn" data-editar="${esc(d.id)}">${ic("edit")}Editar plan</button>
-      ${d.citas.length ? `<button class="btn pri" data-empezar="${esc(d.id)}">${ic("play", "style='fill:#f5c86a;stroke:none'")}Empezar sermón</button>` : ""}</div></div>
-    <ol class="citas">${d.citas.map((c, i) => `<li><button class="cita" data-cita="${enc(c)}" data-domingo-i="${enc({ id: d.id, i })}">
-      <span class="num-c">${i + 1}</span><span><b>${esc(c.etiqueta)}</b>${c.titulo ? `<small>${esc(c.titulo)}</small>` : ""}</span>${ic("der")}</button></li>`).join("")}</ol>
-    <button class="enlace" data-editar="${esc(d.id)}">Domingos anteriores ›</button>`;
+  const etiqueta = consulta ? "DOMINGO ANTERIOR" : d.fecha === hoyISO() ? "HOY" : d.fecha > hoyISO() ? "PRÓXIMO DOMINGO" : "ÚLTIMO DOMINGO";
+  const s = leerSermon(), prog = !consulta && s?.id === d.id && d.citas[s.i] ? s : null;
+  const boton = consulta || !d.citas.length ? ""
+    : prog ? `<button class="btn ambar" data-empezar="${esc(d.id)}" data-desde="${prog.i}">${ic("play")}Seguir sermón · cita ${prog.i + 1}</button>`
+    : `<button class="btn ambar" data-empezar="${esc(d.id)}" data-desde="0">${ic("play")}Empezar sermón</button>`;
+  // Un domingo anterior es solo para consultar: sus citas se abren sueltas, sin el plan en la barra.
+  const citas = d.citas.map((c, i) => {
+    const estado = prog?.i === i ? "actual" : prog?.vistas.includes(i) ? "leida" : "";
+    const enPantalla = proy.activo && proy.codigo === c.codigo;
+    const marca = estado === "actual" ? `<span class="marca-c"><i></i>Leyendo ahora${enPantalla ? " · en pantalla" : ""}</span>`
+      : estado === "leida" ? `<span class="marca-c leida">leída</span>` : ic("der");
+    return `<li><button class="cita ${estado}" data-cita="${enc(c)}" ${consulta ? "" : `data-domingo-i="${enc({ id: d.id, i })}"`} ${estado === "actual" ? 'aria-current="step"' : ""}>
+      <span class="num-c">${estado === "leida" ? ic("ok") : i + 1}</span><span><b>${esc(c.etiqueta)}</b>${c.titulo ? `<small>${esc(c.titulo)}</small>` : ""}</span>${marca}</button></li>`;
+  }).join("");
+  const anteriores = almacen.domingos().filter(x => x.id !== vigente?.id && x.fecha < (vigente?.fecha ?? hoyISO())).slice(0, 8);
+  return `<div class="dom-grid"><section class="dom-plan">
+      <div class="cab-dom"><div><div class="eti oro">${etiqueta} · ${esc(fechaLarga(d.fecha).toUpperCase())}</div>
+        <span class="ref">${esc(d.titulo || "Sin título")}</span></div>${boton}</div>
+      <ol class="citas">${citas}</ol>
+      <div class="acciones">${consulta ? `<button class="enlace" data-ver-domingo="">‹ Volver al domingo actual</button>` : ""}
+        <button class="enlace" data-editar="${esc(d.id)}">${ic("edit")}Editar este domingo</button></div></section>
+    <aside class="card dom-ant" aria-label="Domingos anteriores"><h2>Domingos anteriores</h2>
+      <p class="meta">Solo para consultar. Tocar uno abre sus citas; para cambiarlo, «Editar».</p>
+      ${anteriores.length ? anteriores.map(x => `<div class="ant ${x.id === consulta?.id ? "sel" : ""}"><span><b>${esc(fechaCorta(x.fecha))}</b>
+        <small>${esc(x.titulo || "Sin título")} · ${x.citas.length} ${x.citas.length === 1 ? "cita" : "citas"}</small></span>
+        <button class="btn peq" data-ver-domingo="${esc(x.id)}">Ver</button></div>`).join("") : `<p class="vacio">Todavía no hay domingos anteriores.</p>`}
+      <button class="btn marino" data-editar="">＋ Preparar otro domingo</button></aside></div>`;
 }
 
 function lineasDomingo(txt) {
@@ -155,12 +205,13 @@ function vistaEditor() {
     <div class="domingos-lista"><button class="btn ${d ? "" : "pri"}" data-domingo="">＋ Nuevo domingo</button>
       ${ds.map(x => `<button class="domingo-mini ${x.id === domingoSel ? "sel" : ""}" data-domingo="${esc(x.id)}"><b>${esc(x.titulo || "Sin título")}</b><br><small>${esc(fechaLarga(x.fecha))} · ${x.citas.length} citas</small></button>`).join("")}</div>
     <form id="f-domingo" class="card form">
-      <label>Fecha<input type="date" id="d-fecha" required value="${esc(d?.fecha || proximoDomingo(new Date()))}"></label>
-      <label>Título del sermón (opcional)<input id="d-titulo" maxlength="80" value="${esc(d?.titulo || "")}"></label>
-      <label>Una cita por línea. Ejemplo: ef 2 8-9 / La salvación por gracia
-        <textarea id="d-citas">${esc(texto)}</textarea></label>
+      <label for="d-fecha">Fecha<input type="date" id="d-fecha" required value="${esc(d?.fecha || proximoDomingo(new Date()))}"></label>
+      <label for="d-titulo">Título del sermón (opcional)<input id="d-titulo" maxlength="80" value="${esc(d?.titulo || "")}"></label>
+      <label for="d-citas">Una cita por línea. Ejemplo: ef 2 8-9 / La salvación por gracia
+        <textarea id="d-citas" spellcheck="false" autocorrect="off" autocapitalize="off" aria-describedby="d-prevista">${esc(texto)}</textarea></label>
       <ul id="d-prevista" class="prevista"></ul>
-      <div class="acciones">${d ? `<button type="button" class="btn peli" id="d-borrar">Borrar</button>` : ""}<button type="submit" class="btn pri" id="d-guardar">Guardar domingo</button></div>
+      <div class="acciones">${d ? `<button type="button" class="btn peli" id="d-borrar">Borrar</button>` : ""}<button type="submit" class="btn pri" id="d-guardar" aria-describedby="d-ayuda">Guardar domingo</button></div>
+      <p id="d-ayuda" class="meta" hidden></p>
     </form>`;
 }
 
@@ -169,7 +220,11 @@ function previstaDomingo() {
   $("#d-prevista").innerHTML = ls.map(l => l.r.ok
     ? `<li class="ok">✓ ${esc(l.r.etiqueta)}${l.titulo ? ` · ${esc(l.titulo)}` : ""}</li>`
     : `<li class="mal">✗ “${esc(l.linea)}”: ${esc(l.r.error)}</li>`).join("");
-  $("#d-guardar").disabled = !ls.length || ls.some(l => !l.r.ok);
+  const hayMal = ls.some(l => !l.r.ok);
+  $("#d-guardar").disabled = !ls.length || hayMal;
+  const ay = $("#d-ayuda");
+  ay.textContent = hayMal ? "Corrige las líneas marcadas con ✗" : "Escribe al menos una cita";
+  ay.hidden = ls.length > 0 && !hayMal;
 }
 
 // ---------- Biblia y búsqueda ----------
@@ -203,18 +258,14 @@ function pista() {
       ${r.sugerencias.map(s => `<button type="button" class="sugerencia" data-sugerir="${esc(s + (r.numeros ? " " + r.numeros : ""))}">${esc(s)}</button>`).join("")}`;
 }
 
-async function armarIndice() {
-  const versiones = [];
-  for (const m of await biblias.versiones()) {
-    const libros = {};
-    for (const [n, [codigo, , caps]] of LIBROS.entries())
-      for (let c = 1; c <= caps; c++) {
-        const cap = await biblias.capitulo(m.sigla, codigo, c);
-        if (cap) (libros[n + 1] ??= {})[c] = cap;
-      }
-    versiones.push({ sigla: m.sigla, libros });
+// El índice de búsqueda se arma por partes (sin congelar la pantalla) y una sola vez. Si falla, se descarta
+// para que la próxima búsqueda lo intente de nuevo. Se empieza a armar al abrir la vista Biblia.
+function prepararIndice() {
+  if (!indice) {
+    const p = armarIndiceDesde(biblias).catch(e => { if (indice === p) indice = null; throw e; });
+    indice = p;
   }
-  return crearIndice(versiones);
+  return indice;
 }
 
 async function buscarTexto(consulta, sigla = null) {
@@ -223,13 +274,8 @@ async function buscarTexto(consulta, sigla = null) {
   const mostrar = () => { if (vista === "biblia" && busqueda === mia && $("#resultados")) $("#resultados").innerHTML = htmlResultados(); };
   try {
     mia.versiones = (await biblias.versiones()).map(m => m.sigla);
-    if (!indice) {
-      if ($("#resultados")) $("#resultados").innerHTML = `<p class="meta">Preparando la búsqueda… (solo la primera vez)</p>`;
-      // Si armar el índice falla, se descarta para que la próxima búsqueda lo intente de nuevo.
-      const p = armarIndice().catch(e => { if (indice === p) indice = null; throw e; });
-      indice = p;
-    }
-    const idx = await indice;
+    if (!indice && $("#resultados")) $("#resultados").innerHTML = `<p class="meta">Preparando la búsqueda… (solo la primera vez)</p>`;
+    const idx = await prepararIndice();
     if (busqueda !== mia) return;
     mia.resultados = buscar(idx, consulta, { sigla, max: 20 });
     mostrar();
@@ -308,13 +354,14 @@ function vistaConfig() {
     <section class="card"><h2>Apariencia</h2>
       <div class="lin">Tema ${seg("tema", [["claro", "Claro"], ["oscuro", "Oscuro"]], c.tema)}</div>
       <div class="lin">Tamaño de letra ${seg("letra", [["normal", "A", "font-size:14px"], ["grande", "A", "font-size:18px"], ["muy-grande", "A", "font-size:22px"]], c.letra)}</div>
+      <div class="lin">Orientación de la pantalla ${seg("orientacion", [["horizontal", "Horizontal"], ["vertical", "Vertical"]], c.orientacion)}</div>
       <div class="lin"><p class="texto-biblia" id="c-previa" style="margin:0;font-size:calc(var(--base) * 1.1)"><span class="ref">Juan 3:16</span></p></div></section>
     <section class="card"><h2>Pantalla de proyección</h2>
       ${c.pantalla ? `<div class="lin">Conectada a <b>${esc(c.pantalla)}</b> ${estado}</div>
         <div class="lin meta">Lo que proyectas aparece en la pantalla de la iglesia.</div>
-        <div class="acciones"><button type="button" class="btn peq" id="c-desconectar">Cambiar código</button><button type="button" class="btn peq peli" id="c-desconectar2">Desconectar</button></div>`
-      : `<form id="f-pantalla" class="lin" style="display:grid;gap:10px;border:0"><label class="meta">Código que muestra la pantalla de la iglesia (tecla F2)</label>
-        <input id="c-pantalla" class="campo" placeholder="UC-XXXX-XXXX" autocomplete="off" autocapitalize="characters" maxlength="20">
+        <div class="acciones"><button type="button" class="btn peq peli" id="c-desconectar">Desconectar la pantalla</button></div>`
+      : `<form id="f-pantalla" class="lin" style="display:grid;gap:10px;border:0"><label class="meta" for="c-pantalla">Código que muestra la pantalla de la iglesia (tecla F2)</label>
+        <input id="c-pantalla" class="campo" placeholder="UC-XXXX-XXXX" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="20">
         <div><button class="btn pri peq">Conectar</button></div></form>`}</section>
     <section class="card" id="c-versiones"><h2>Versiones de la Biblia</h2><p class="meta">Cargando…</p></section>
     <section class="card"><h2>Copia de respaldo</h2>
@@ -356,6 +403,18 @@ function descargarCopia(texto, msg) {
   almacen.marcarRespaldo(); pintar(); aviso(msg, 8000);
 }
 
+// Orientación fija según Configuración (la app no gira sola). Si el navegador no deja, avisa una sola vez.
+let avisoOrientacion = false;
+// Al abrir la app se fija en silencio; solo si el pastor la elige en Configuración y no se puede, se avisa.
+async function fijarOrientacion({ callado = false } = {}) {
+  const modo = almacen.config().orientacion === "vertical" ? "portrait" : "landscape";
+  try { await screen.orientation.lock(modo); }
+  catch {
+    if (callado || avisoOrientacion) return;
+    avisoOrientacion = true; aviso("Tu tablet no permite fijar la orientación desde la app", 6000);
+  }
+}
+
 function desconectar() {
   almacen.guardarConfig({ pantalla: null }); soltarPantalla(); proy.respuesta = null;
   conectarPantalla(); pintar();
@@ -369,6 +428,7 @@ const repintarLector = () => pintarLector(lectura).then(sincronizarProyeccion)
 // ---------- Navegación ----------
 function pintar() {
   aplicarTema();
+  luzDelLector(vista === "lector"); // la tablet no se apaga mientras se lee
   document.body.classList.toggle("en-lector", vista === "lector");
   $("#vista").innerHTML = { domingo: vistaDomingo, biblia: vistaBiblia, guardados: vistaGuardados, config: vistaConfig, lector: () => vistaLector(lectura) }[vista]();
   document.querySelectorAll(".nav [data-ir]").forEach(b => b.classList.toggle("activa", b.dataset.ir === vista));
@@ -396,8 +456,13 @@ document.addEventListener("click", async ev => {
   const d = t.dataset;
   if (d.ir) {
     if (!await puedeSalirEditor()) return;
-    if (d.ir === "domingo") editando = false;
-    return ir(d.ir);
+    if (d.ir === "domingo") { editando = false; verDomingo = null; }
+    ir(d.ir);
+    // Al entrar a Biblia se escribe de una vez, salvo que ya haya resultados o un pasaje abierto en pantalla (no abrir el teclado).
+    if (d.ir === "biblia" && !busqueda && !proy.activo) $("#q")?.focus();
+    // Con la tablet quieta en la vista Biblia (nunca desde el lector) se empieza a armar la búsqueda.
+    if (d.ir === "biblia" && !proy.activo) prepararIndice().catch(() => {});
+    return;
   }
   if (t.hasAttribute("data-volver")) return history.back();
   if (t.hasAttribute("data-buscar")) { ir("biblia"); return $("#q")?.focus(); }
@@ -405,10 +470,29 @@ document.addEventListener("click", async ev => {
   if (t.hasAttribute("data-reintentar")) return reintentar();
   if (d.parte) return cambiarParte(Number(d.parte));
   if (t.hasAttribute("data-quitar-pantalla")) return quitarDePantalla();
-  if (t.id === "c-desconectar" || t.id === "c-desconectar2") { desconectar(); return avisoGuardado("Pantalla desconectada"); }
+  if (t.id === "c-desconectar") {
+    const queda = proy.activo ? " Lo que está proyectado se queda en la pantalla." : "";
+    if (!await confirmar(`¿Desconectar la pantalla de la iglesia?${queda} Tendrás que escribir el código otra vez.`, "Sí, desconectar", "Cancelar")) return;
+    desconectar(); return avisoGuardado("Pantalla desconectada");
+  }
+  // Desde el lector: letra y tema cambian al instante, sin volver a dibujar el pasaje (no se pierde la posición).
+  if (d.letraPaso) {
+    const i = LETRAS.indexOf(almacen.config().letra) + Number(d.letraPaso);
+    if (!LETRAS[i]) return;
+    almacen.guardarConfig({ letra: LETRAS[i] }); aplicarTema(); pintarHerramientas(); return avisoGuardado();
+  }
+  if (t.hasAttribute("data-tema-cambiar")) {
+    almacen.guardarConfig({ tema: almacen.config().tema === "oscuro" ? "claro" : "oscuro" });
+    aplicarTema(); pintarHerramientas(); return avisoGuardado();
+  }
+  if (d.verDomingo !== undefined) { verDomingo = d.verDomingo || null; pintar(); return ($("#vista").scrollTop = 0); }
   if (d.tema) { almacen.guardarConfig({ tema: d.tema }); pintar(); return avisoGuardado(); }
   if (d.letra) { almacen.guardarConfig({ letra: d.letra }); pintar(); return avisoGuardado(); }
-  if (d.capitulo) { const c = dec(d.capitulo); return abrirCapitulo(c.codigo, c.cap); }
+  if (d.orientacion) { almacen.guardarConfig({ orientacion: d.orientacion }); pintar(); fijarOrientacion(); return avisoGuardado(); }
+  if (d.capitulo) {
+    const c = dec(d.capitulo);
+    return abrirCapitulo(c.codigo, c.cap);
+  }
   if (d.versiculo) { const r = dec(d.versiculo); return abrir({ codigo: codigoRef(r), etiqueta: etiquetaRef(r) }, { navegando: true }); }
   if (d.libro !== undefined) { libroSel = d.libro || null; pintar(); return ($("#vista").scrollTop = 0); }
   if (d.testamento) { testamento = d.testamento; libroSel = null; return pintar(); }
@@ -428,7 +512,7 @@ document.addEventListener("click", async ev => {
   }
   if (d.principal) { await biblias.hacerPrincipal(d.principal); return pintarVersiones(); }
   if (d.quitarVersion) {
-    if (!confirm(`¿Quitar la versión ${d.quitarVersion} de esta tablet?`)) return;
+    if (!await confirmar(`¿Quitar la versión ${d.quitarVersion} de esta tablet?`, "Sí, quitar", "Cancelar")) return;
     await biblias.quitar(d.quitarVersion); indice = null; aviso("Versión quitada"); return pintarVersiones();
   }
   if (d.domPaso) {
@@ -439,7 +523,8 @@ document.addEventListener("click", async ev => {
   if (d.empezar) {
     const dm = almacen.domingos().find(x => x.id === d.empezar);
     if (!dm?.citas.length) return;
-    abrir(dm.citas[0], { domingo: { id: dm.id, i: 0 } });
+    const i = dm.citas[Number(d.desde)] ? Number(d.desde) : 0; // "Seguir sermón" retoma la cita en la que iba
+    abrir(dm.citas[i], { domingo: { id: dm.id, i } });
     if (hayPantalla()) proyectarActual();
     return;
   }
@@ -461,7 +546,7 @@ document.addEventListener("click", async ev => {
     return ofrecerBorrador();
   }
   if (d.serie) { document.querySelectorAll("#fav-series .chip").forEach(c => c.classList.toggle("sel", c === t)); $("#fav-nueva").value = d.serie; }
-  if (t.id === "d-borrar" && confirm("¿Borrar este domingo?")) {
+  if (t.id === "d-borrar" && await confirmar("¿Borrar este domingo?", "Sí, borrar", "Cancelar")) {
     almacen.borrarDomingo(domingoSel); domingoSel = null; borrarBorrador(); pintar();
     avisoGuardado("Domingo borrado");
   }
@@ -517,6 +602,7 @@ document.addEventListener("submit", ev => {
     const ok = almacen.guardarConfig({ pantalla: codigo }); conectarPantalla(); pintar();
     return aviso(ok ? "Pantalla conectada" : "Pantalla conectada, pero no se pudo guardar en la tablet: falta espacio", ok ? 3500 : 7000);
   }
+  if (f.id === "f-sigla") $("#dlg-sigla").close(ev.submitter?.value === "cancelar" ? "cancelar" : "ok");
   if (f.id === "f-fav") {
     const guardar = ev.submitter?.value !== "cancelar" && favPendiente;
     const ok = guardar ? almacen.agregarFavorito($("#fav-nueva").value, favPendiente) : false;
@@ -529,27 +615,18 @@ document.addEventListener("change", async ev => {
   if (ev.target.id === "c-biblia" && ev.target.files[0]) {
     const inp = ev.target, archivo = inp.files[0];
     inp.value = "";
-    let fase = "leer", sigla = "";
+    // La misma carga que la pantalla de la PC (src/importar.js): lee, pide sigla, confirma el reemplazo y guarda.
     try {
-      verificarTamano(archivo.size);
-      aviso("Leyendo la Biblia…", 60000);
-      const b = importarBiblia(decodificar(await archivo.arrayBuffer()));
-      if (!b.sigla) b.sigla = (prompt("¿Qué sigla le ponemos a esta versión? (por ejemplo TLA)") || "").trim().slice(0, 20);
-      if (!b.sigla) return aviso("Carga cancelada: falta la sigla");
-      sigla = b.sigla; fase = "guardar";
-      const ya = (await biblias.versiones()).some(m => m.sigla === b.sigla);
-      if (ya && !confirm(`Ya hay una versión ${b.sigla}. ¿Reemplazarla por este archivo?`)) return aviso("Carga cancelada");
-      aviso("Guardando en la tablet…", 60000);
-      try { await biblias.guardar(b); } finally { indice = null; }
-      const resumen = `${b.sigla}: ${b.resumen.libros} libros, ${b.resumen.versiculos.toLocaleString("es")} versículos${b.resumen.agrupados ? ` (${b.resumen.agrupados.toLocaleString("es")} agrupados)` : ""}`;
-      const av = b.advertencias ?? [];
-      aviso(av.length ? `${resumen}. Atención: ${av.join(". ")}` : resumen, av.length ? 15000 : 8000);
+      await cargarBiblia(archivo, biblias, {
+        avisar: aviso,
+        invalidar: () => { indice = null; },
+        pedirSigla,
+        confirmar: sigla => confirmar(`Ya hay una versión ${sigla}. ¿Reemplazarla por este archivo?`, "Sí, reemplazar", "Cancelar"),
+      });
     } catch (e) {
       console.error("Cargar Biblia:", e);
-      aviso(e instanceof ErrorBiblia ? e.message
-        : fase === "leer" ? "No se pudo leer el archivo. Vuelve a elegirlo."
-        : e?.guardada ? `${sigla} se guardó, pero no se pudo borrar la versión anterior: sigue ocupando espacio en la tablet.`
-        : "No se pudo guardar la Biblia (¿falta espacio en la tablet?). La versión anterior sigue igual.", 8000);
+      aviso(e instanceof ErrorBiblia ? e.message : e?.cancelada ? "Carga cancelada"
+        : "No se pudo guardar la Biblia (¿falta espacio en la tablet?). La versión anterior sigue igual.", e?.cancelada ? 3500 : 8000);
     }
     return pintarVersiones();
   }
@@ -559,7 +636,7 @@ document.addEventListener("change", async ev => {
   let texto;
   try { texto = await inp.files[0].text(); }
   catch (e) { console.error("Leer copia:", e); inp.value = ""; return aviso("No se pudo leer el archivo. Vuelve a elegirlo."); }
-  if (confirm("Esto reemplaza todos los datos actuales por los de la copia. ¿Continuar?")) {
+  if (await confirmar("Esto reemplaza todos los datos actuales por los de la copia. ¿Continuar?", "Sí, restaurar", "Cancelar")) {
     let n;
     try { n = almacen.importar(texto); }
     catch (e) {
@@ -582,6 +659,8 @@ $("#dlg-fav").addEventListener("close", () => { favPendiente = null; });
 $("#conf-si").addEventListener("click", () => $("#dlg-confirmar").close("si"));
 $("#conf-no").addEventListener("click", () => $("#dlg-confirmar").close("no"));
 $("#b-actualizar").addEventListener("click", () => location.reload());
+// Al volver a la app, si sigue en el lector se pide de nuevo que la pantalla no se apague.
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") luzAlVolver(); });
 // Pide al navegador que no borre los datos de la tablet cuando falte espacio (sin esperar la respuesta).
 try { navigator.storage?.persist?.()?.catch?.(() => {}); } catch { /* no disponible */ }
 {
@@ -598,6 +677,7 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 conectarPantalla();
+fijarOrientacion({ callado: true });
 // Si la app se recargó con un pasaje en la pantalla de la iglesia, se vuelve al lector en ese pasaje:
 // así el pastor tiene a mano "Quitar" y "Reintentar" (la barra dice "Sin confirmar" hasta que la PC responda).
 const refProyectada = proy.activo ? refDeCodigo(proy.codigo) : null;

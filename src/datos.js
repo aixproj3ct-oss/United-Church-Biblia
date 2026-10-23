@@ -4,17 +4,19 @@ const CLAVE = "uc-biblia-v1";
 const MAX_HISTORIAL = 30;
 
 const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [],
-  config: { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null } });
+  config: { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal" } });
 
-const LETRAS = ["normal", "grande", "muy-grande"];
+export const LETRAS = ["normal", "grande", "muy-grande"];
 const TEMAS = ["claro", "oscuro"];
-const sanearConfig = c => {
+export const ORIENTACIONES = ["horizontal", "vertical"];
+export const sanearConfig = c => {
   const o = c && typeof c === "object" ? c : {};
   return {
     letra: LETRAS.includes(o.letra) ? o.letra : "grande",
     ultimoRespaldo: typeof o.ultimoRespaldo === "string" ? o.ultimoRespaldo : null,
     tema: TEMAS.includes(o.tema) ? o.tema : "claro",
     pantalla: normalizarCodigo(o.pantalla),
+    orientacion: ORIENTACIONES.includes(o.orientacion) ? o.orientacion : "horizontal",
   };
 };
 
