@@ -2,10 +2,11 @@
 import { normalizarCodigo } from "./proyeccion/mensajes.js";
 import { validoCita } from "./citas.js";
 import { fechaReal } from "./fechas.js";
+import { sanearBosquejo } from "./bosquejo/modelo.js";
 const CLAVE = "uc-biblia-v1";
 const MAX_HISTORIAL = 30;
 
-const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [],
+const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [], bosquejos: [],
   config: { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal", pastor: "" } });
 
 export const LETRAS = ["normal", "grande", "muy-grande"];
@@ -39,6 +40,13 @@ const valido = e => e && e.version === 1 && Array.isArray(e.domingos) && Array.i
 const validoDomingo = d => d && typeof d.id === "string" && fechaReal(d.fecha) && typeof d.titulo === "string" && Array.isArray(d.citas) && d.citas.every(validoCita);
 const validoFavorito = f => f && typeof f.id === "string" && typeof f.serie === "string" && validoCita(f.cita);
 const validoHistorial = h => h && validoCita(h.cita) && typeof h.cuando === "string";
+// Los bosquejos no se exigen en valido(): un estado o una copia vieja sin ellos sigue siendo válido (queda en []).
+// Devuelve la lista saneada y cuántos se apartaron por estar dañados.
+const sanearBosquejos = l => {
+  const lista = Array.isArray(l) ? l : [];
+  const ok = lista.map(sanearBosquejo).filter(Boolean);
+  return { ok, descartados: lista.length - ok.length };
+};
 
 // Copias de seguridad automáticas: solo se conservan las más recientes de cada tipo.
 const PREF_ANTES = `${CLAVE}-antes-import-`, PREF_CRUDO = `${CLAVE}-crudo-`;
@@ -87,7 +95,9 @@ export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () =>
     e.favoritos = e.favoritos.filter(validoFavorito);
     e.historial = e.historial.filter(validoHistorial);
     e.config = sanearConfig(e.config);
-    descartados = antes - (e.domingos.length + e.favoritos.length + e.historial.length);
+    const bq = sanearBosquejos(e.bosquejos);
+    e.bosquejos = bq.ok;
+    descartados = antes - (e.domingos.length + e.favoritos.length + e.historial.length) + bq.descartados;
     // Lo dañado se aparta: queda una copia cruda del estado completo antes de que un guardado lo sobrescriba.
     if (descartados) copiaCarga = escribirCopia(storage, PREF_CRUDO, String(reloj().getTime()), String(crudo));
   }
@@ -119,6 +129,19 @@ export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () =>
       return d.id;
     },
     borrarDomingo(id) { e.domingos = e.domingos.filter(d => d.id !== id); return guardar(); },
+    // Más reciente primero: por fecha y, a igual fecha, por la última vez que se guardó.
+    bosquejos: () => [...e.bosquejos].sort((a, b) => b.fecha.localeCompare(a.fecha) || b.actualizado.localeCompare(a.actualizado)),
+    // Devuelve el id, o null si el bosquejo no es válido (no se guarda). Para saber si quedó escrito: persistido().
+    guardarBosquejo(b) {
+      if (!b || typeof b !== "object") return null;
+      const s = sanearBosquejo({ ...b, id: b.id || nuevoId(), actualizado: reloj().toISOString() });
+      if (!s) return null;
+      const i = e.bosquejos.findIndex(x => x.id === s.id);
+      if (i >= 0) e.bosquejos[i] = s; else e.bosquejos.push(s);
+      guardar();
+      return s.id;
+    },
+    borrarBosquejo(id) { e.bosquejos = e.bosquejos.filter(b => b.id !== id); return guardar(); },
     domingoActual(hoy) {
       const prox = e.domingos.filter(d => d.fecha >= hoy).sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
       return prox || [...e.domingos].sort((a, b) => b.fecha.localeCompare(a.fecha))[0] || null;
@@ -159,7 +182,9 @@ export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () =>
       n.domingos = n.domingos.filter(validoDomingo);
       n.favoritos = n.favoritos.filter(validoFavorito);
       n.historial = n.historial.filter(validoHistorial);
-      const descartados = antes - (n.domingos.length + n.favoritos.length + n.historial.length);
+      const bq = sanearBosquejos(n.bosquejos);
+      n.bosquejos = bq.ok;
+      const descartados = antes - (n.domingos.length + n.favoritos.length + n.historial.length) + bq.descartados;
       n.historial = n.historial.slice(0, MAX_HISTORIAL);
       // El código de pantalla que traiga el archivo se ignora: la tablet conserva el suyo.
       n.config = { ...sanearConfig(n.config), pantalla: e.config.pantalla };

@@ -247,3 +247,22 @@ test("backendIndexedDB: si la apertura falla, la siguiente llamada reintenta", a
     if (original) Object.defineProperty(globalThis, "indexedDB", original); else delete globalThis.indexedDB;
   }
 });
+
+// ---------- bosquejos: sin espacio ----------
+test("sin espacio, guardarBosquejo deja persistido() en false", () => {
+  const s = memoria();
+  const a = crearAlmacen(s);
+  const b = { fecha: "2026-10-25", titulo: "T", cita: null, puntos: [{ frase: "F", versos: [] }], recuerda: "" };
+  assert.ok(a.guardarBosquejo(b));
+  assert.equal(a.persistido(), true);
+  s.fallar = true;
+  const id = a.guardarBosquejo(b);
+  assert.ok(id, "devuelve el id aunque no quedó escrito");
+  assert.equal(a.persistido(), false);
+  assert.equal(a.bosquejos().length, 2, "queda en memoria");
+  assert.equal(a.borrarBosquejo(id), false);
+  assert.equal(a.persistido(), false);
+  s.fallar = false;
+  assert.equal(a.borrarBosquejo("no-existe"), true);
+  assert.equal(a.persistido(), true);
+});

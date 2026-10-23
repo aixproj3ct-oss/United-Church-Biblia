@@ -248,3 +248,83 @@ test("el nombre del pastor se guarda limpio y corto; si no es texto queda vacío
   assert.equal(sanearConfig({ pastor: 5 }).pastor, "");
   assert.equal(sanearConfig({}).pastor, "");
 });
+
+// ---------- bosquejos ----------
+const bosq = (extra = {}) => ({ fecha: "2026-10-25", titulo: "  Por gracia  ", cita: cita("EPH.2.8", "Efesios 2:8"),
+  puntos: [{ frase: "Es un regalo", versos: [cita("EPH.2.8", "Efesios 2:8")], explicacion: "nota", ilustracion: "" }],
+  recuerda: "La gracia basta", ...extra });
+
+test("un estado sin bosquejos carga con cero y sin descartar nada", () => {
+  const m = memoria();
+  m.setItem("uc-biblia-v1", JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: {} }));
+  const a = crearAlmacen(m, () => new Date(7000));
+  assert.deepEqual(a.bosquejos(), []);
+  assert.equal(a.descartados(), 0);
+  assert.deepEqual(a.infoCarga(), { descartados: 0, ilegible: false, copia: false });
+  assert.equal(JSON.parse(a.exportar()).bosquejos.length, 0);
+});
+
+test("guardarBosquejo devuelve el id y bosquejos() lo trae saneado", () => {
+  const m = memoria();
+  const a = crearAlmacen(m, () => new Date("2026-10-22T10:00:00Z"));
+  const id = a.guardarBosquejo(bosq());
+  assert.equal(typeof id, "string");
+  const [b] = a.bosquejos();
+  assert.equal(b.id, id);
+  assert.equal(b.titulo, "Por gracia", "se recorta");
+  assert.equal(b.actualizado, "2026-10-22T10:00:00.000Z", "lo pone el reloj");
+  assert.equal(a.persistido(), true);
+  // reemplaza por id y el orden es fecha desc, luego actualizado desc
+  assert.equal(a.guardarBosquejo({ ...bosq({ titulo: "Editado" }), id, actualizado: "1999" }), id);
+  assert.equal(a.bosquejos().length, 1);
+  assert.equal(a.bosquejos()[0].titulo, "Editado");
+  assert.equal(a.bosquejos()[0].actualizado, "2026-10-22T10:00:00.000Z");
+  const viejo = a.guardarBosquejo(bosq({ fecha: "2026-10-18", titulo: "Viejo" }));
+  const mismo = a.guardarBosquejo(bosq({ titulo: "Mismo día" }));
+  assert.equal(a.bosquejos().length, 3);
+  assert.equal(a.bosquejos()[2].id, viejo);
+  assert.deepEqual(a.bosquejos().slice(0, 2).map(x => x.id).sort(), [id, mismo].sort());
+  // devuelve copias, no el arreglo interno
+  a.bosquejos().pop();
+  assert.equal(a.bosquejos().length, 3);
+  // inválido: no se guarda
+  assert.equal(a.guardarBosquejo(bosq({ puntos: [] })), null);
+  assert.equal(a.guardarBosquejo(bosq({ fecha: "2026-02-30" })), null);
+  assert.equal(a.bosquejos().length, 3);
+  // persiste y se borra
+  assert.equal(crearAlmacen(m).bosquejos().length, 3);
+  assert.equal(a.borrarBosquejo(id), true);
+  assert.equal(a.bosquejos().length, 2);
+  assert.equal(crearAlmacen(m).bosquejos().length, 2);
+});
+
+test("un bosquejo dañado en el guardado se aparta y cuenta como descartado", () => {
+  const m = memoria();
+  const bueno = { ...bosq(), id: "b1", domingoId: null, actualizado: "x", intro: "", aplicacion: "", conclusion: "", titulo: "Bueno" };
+  const crudo = JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: {},
+    bosquejos: [bueno, { id: "b2", fecha: "2026-13-45", puntos: [] }, null] });
+  m.setItem("uc-biblia-v1", crudo);
+  const a = crearAlmacen(m, () => new Date(7000));
+  assert.equal(a.descartados(), 2);
+  assert.deepEqual(a.infoCarga(), { descartados: 2, ilegible: false, copia: true });
+  assert.equal(m.getItem("uc-biblia-v1-crudo-7000"), crudo, "queda copia cruda");
+  assert.deepEqual(a.bosquejos().map(b => b.id), ["b1"]);
+});
+
+test("exportar/importar conserva los bosquejos; una copia vieja sin bosquejos se importa", () => {
+  const a = crearAlmacen(memoria());
+  const id = a.guardarBosquejo(bosq());
+  const copia = a.exportar();
+  assert.equal(JSON.parse(copia).bosquejos[0].id, id);
+  const b = crearAlmacen(memoria());
+  assert.equal(b.importar(copia), 0);
+  assert.equal(b.bosquejos()[0].titulo, "Por gracia");
+  // con uno dañado dentro: se aparta y se cuenta
+  const c = JSON.parse(copia);
+  c.bosquejos.push({ id: "mal", fecha: "x", puntos: [] });
+  assert.equal(crearAlmacen(memoria()).importar(JSON.stringify(c)), 1);
+  // copia vieja (sin la clave): se importa, sin bosquejos y sin descartar nada
+  const vieja = JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: {} });
+  assert.equal(b.importar(vieja), 0);
+  assert.deepEqual(b.bosquejos(), []);
+});
