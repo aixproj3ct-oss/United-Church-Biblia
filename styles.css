@@ -47,7 +47,10 @@ h1{font-size:26px;margin:0 0 14px;font-weight:600}
 html[data-tema="oscuro"] .pill.ok{background:#12301e;color:#86efac}html[data-tema="oscuro"] .pill.mal{background:#3a1212;color:#fca5a5}
 /* Domingo */
 .cab-dom{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.cab-dom .ref{font-size:36px;color:var(--m1);display:block;margin-top:4px}
+/* Tema del sermón en Montserrat recta (no itálica) */
+.cab-dom .ref{font-family:Montserrat,sans-serif;font-style:normal;font-weight:700;font-size:32px;line-height:1.2;letter-spacing:-.01em;color:var(--m1);display:block;margin-top:4px}
+.saludo{margin:0 0 14px;font-size:20px;font-weight:600;color:var(--sub)}
+.saludo b{color:var(--tinta)}
 html[data-tema="oscuro"] .cab-dom .ref{color:var(--tinta)}
 .citas{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:10px}
 .cita{display:flex;align-items:center;gap:16px;padding:12px 18px;min-height:66px;width:100%;text-align:left;border:1px solid var(--borde-control);border-radius:var(--r2);background:var(--card)}

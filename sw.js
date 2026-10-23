@@ -1,6 +1,6 @@
 // Guarda la app para que abra al instante; cada vez que hay conexión trae la versión nueva para la próxima apertura.
 // Los fondos de la lámina no se precachean: solo los usa la PC de la iglesia y se guardan la primera vez que se ven.
-const VERSION = "uc-v20";
+const VERSION = "uc-v21";
 const ARCHIVOS = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest",
   "src/citas.js", "src/libros.js", "src/datos.js", "src/importar.js", "src/pasaje.js", "src/biblias.js", "src/lectura.js",
   "src/busqueda.js", "src/fechas.js", "src/ui.js", "src/lector.js",

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { crearAlmacen } from "../src/datos.js";
+import { crearAlmacen, sanearConfig } from "../src/datos.js";
 
 const memoria = () => { const m = new Map(); return { _mapa: m, getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
 const cita = (codigo, etiqueta = codigo) => ({ codigo, etiqueta });
@@ -43,7 +43,7 @@ test("historial: el más reciente primero, sin repetir, máximo 30", () => {
 test("persiste entre instancias y config por defecto", () => {
   const s = memoria();
   const a = crearAlmacen(s);
-  assert.deepEqual(a.config(), { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal" });
+  assert.deepEqual(a.config(), { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal", pastor: "" });
   a.guardarConfig({ nombre: "Pastor Luis" });
 });
 
@@ -127,14 +127,14 @@ test("config se sanea al cargar: tipos inválidos y claves desconocidas", () => 
   m.setItem("uc-biblia-v1", JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: "  ", letra: "enorme", ultimoRespaldo: 5, extra: "x" } }));
   const cfg = crearAlmacen(m).config();
-  assert.deepEqual(cfg, { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal" });
+  assert.deepEqual(cfg, { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal", pastor: "" });
 });
 
 test("config se sanea al importar", () => {
   const a = crearAlmacen(memoria());
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: 42, letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", otro: 1 } }));
-  assert.deepEqual(a.config(), { letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", tema: "claro", pantalla: null, orientacion: "horizontal" });
+  assert.deepEqual(a.config(), { letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", tema: "claro", pantalla: null, orientacion: "horizontal", pastor: "" });
 });
 
 test("crearAlmacen sin argumentos no lanza si localStorage falla o no existe", () => {
@@ -241,3 +241,10 @@ test("importar guarda antes una copia del estado actual y acepta copias viejas (
   assert.equal("nombre" in a.config(), false);
 });
 
+
+test("el nombre del pastor se guarda limpio y corto; si no es texto queda vacío", () => {
+  assert.equal(sanearConfig({ pastor: "  Juan   Pérez \n" }).pastor, "Juan Pérez");
+  assert.equal(sanearConfig({ pastor: "x".repeat(60) }).pastor.length, 40);
+  assert.equal(sanearConfig({ pastor: 5 }).pastor, "");
+  assert.equal(sanearConfig({}).pastor, "");
+});

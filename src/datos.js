@@ -4,7 +4,7 @@ const CLAVE = "uc-biblia-v1";
 const MAX_HISTORIAL = 30;
 
 const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [],
-  config: { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal" } });
+  config: { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal", pastor: "" } });
 
 export const LETRAS = ["normal", "grande", "muy-grande"];
 const TEMAS = ["claro", "oscuro"];
@@ -17,6 +17,8 @@ export const sanearConfig = c => {
     tema: TEMAS.includes(o.tema) ? o.tema : "claro",
     pantalla: normalizarCodigo(o.pantalla),
     orientacion: ORIENTACIONES.includes(o.orientacion) ? o.orientacion : "horizontal",
+    // Nombre del pastor para el saludo ("Buenos días, pastor …"); texto corto, sin saltos de línea.
+    pastor: typeof o.pastor === "string" ? o.pastor.replace(/\s+/g, " ").trim().slice(0, 40) : "",
   };
 };
 

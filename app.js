@@ -139,6 +139,13 @@ function abrirCapitulo(codigo, cap) {
   abrir({ codigo: codigoRef(ref), etiqueta: etiquetaRef(ref) }, { completo: true, navegando: vista === "lector" });
 }
 
+// "Buenos días, pastor Juan" según la hora de la tablet; sin nombre en Configuración, solo el saludo.
+function saludo() {
+  const h = new Date().getHours(), s = h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
+  const n = almacen.config().pastor.replace(/^pastor\s+/i, "");
+  return `<p class="saludo">${s}${n ? `, <b>pastor ${esc(n)}</b>` : ""}</p>`;
+}
+
 // ---------- Domingo ----------
 // Por dónde va el sermón: la cita que se lee ahora y las ya abiertas (solo referencias, en esta tablet).
 const CLAVE_SERMON = "uc-sermon";
@@ -158,7 +165,7 @@ function vistaDomingo() {
   const vigente = almacen.domingoActual(hoyISO());
   const consulta = verDomingo ? almacen.domingos().find(x => x.id === verDomingo && x.id !== vigente?.id) ?? null : null;
   const d = consulta ?? vigente;
-  if (!d) return `<h1>Domingo</h1><div class="card form"><h2>Aún no hay un domingo preparado</h2>
+  if (!d) return `${saludo()}<h1>Domingo</h1><div class="card form"><h2>Aún no hay un domingo preparado</h2>
     <p class="meta">Anota las citas del sermón y aquí aparecerán como botones, listas para proyectar.</p>
     <div><button class="btn pri" data-editar="">${ic("edit")}Preparar el domingo</button></div></div>`;
   const etiqueta = consulta ? "DOMINGO ANTERIOR" : d.fecha === hoyISO() ? "HOY" : d.fecha > hoyISO() ? "PRÓXIMO DOMINGO" : "ÚLTIMO DOMINGO";
@@ -176,7 +183,7 @@ function vistaDomingo() {
       <span class="num-c">${estado === "leida" ? ic("ok") : i + 1}</span><span><b>${esc(c.etiqueta)}</b>${c.titulo ? `<small>${esc(c.titulo)}</small>` : ""}</span>${marca}</button></li>`;
   }).join("");
   const anteriores = almacen.domingos().filter(x => x.id !== vigente?.id && x.fecha < (vigente?.fecha ?? hoyISO())).slice(0, 8);
-  return `<div class="dom-grid"><section class="dom-plan">
+  return `${saludo()}<div class="dom-grid"><section class="dom-plan">
       <div class="cab-dom"><div><div class="eti oro">${etiqueta} · ${esc(fechaLarga(d.fecha).toUpperCase())}</div>
         <span class="ref">${esc(d.titulo || "Sin título")}</span></div>${boton}</div>
       <ol class="citas">${citas}</ol>
@@ -233,7 +240,7 @@ function vistaBiblia() {
   const ultimo = h && refDeCodigo(h.cita.codigo);
   const libro = libroSel && LIBROS.find(l => l[0] === libroSel);
   const libros = testamento === "at" ? LIBROS.slice(0, 39) : LIBROS.slice(39);
-  return `<h1>Biblia</h1>
+  return `${saludo()}<h1>Biblia</h1>
     <form id="f-buscar" autocomplete="off">${ic("bus", "style='color:var(--sub)'")}
       <input id="q" type="search" enterkeyhint="search" value="${esc(busqueda?.consulta || "")}" placeholder="Una cita (jn 3 16) o unas palabras del versículo" aria-label="Cita o texto">
       <button type="submit" class="btn pri" id="b-abrir" disabled>Abrir</button></form>
@@ -351,6 +358,10 @@ function vistaConfig() {
   const seg = (attr, ops, val) => `<span class="seg">${ops.map(([v, t, st]) => `<button class="${v === val ? "on" : ""}" data-${attr}="${v}" ${st ? `style="${st}"` : ""}>${t}</button>`).join("")}</span>`;
   const estado = !c.pantalla ? "" : sinRespuesta() ? `<span class="pill mal">● Sin respuesta</span>` : proy.respuesta ? `<span class="pill ok">● Responde</span>` : "";
   return `<h1>Configuración</h1><div class="cfg">
+    <section class="card"><h2>Saludo</h2>
+      <form id="f-pastor" class="lin" style="display:grid;gap:10px;border:0"><label class="meta" for="c-pastor">Nombre del pastor (la app dice «Buenos días, pastor …»)</label>
+        <input id="c-pastor" class="campo" maxlength="40" value="${esc(c.pastor)}" placeholder="Por ejemplo: Juan Pérez" autocomplete="off" autocapitalize="words" spellcheck="false">
+        <div><button class="btn pri peq">Guardar</button></div></form></section>
     <section class="card"><h2>Apariencia</h2>
       <div class="lin">Tema ${seg("tema", [["claro", "Claro"], ["oscuro", "Oscuro"]], c.tema)}</div>
       <div class="lin">Tamaño de letra ${seg("letra", [["normal", "A", "font-size:14px"], ["grande", "A", "font-size:18px"], ["muy-grande", "A", "font-size:22px"]], c.letra)}</div>
@@ -595,6 +606,10 @@ document.addEventListener("submit", ev => {
     // Sin espacio: el editor queda abierto con lo escrito (y el borrador) para reintentar; no se dice "guardado".
     if (!almacen.persistido()) return aviso(`${SIN_ESPACIO}. Lo que escribiste sigue aquí.`, 8000);
     borrarBorrador(); editando = false; pintar(); aviso("Domingo guardado");
+  }
+  if (f.id === "f-pastor") {
+    almacen.guardarConfig({ pastor: $("#c-pastor").value }); pintar();
+    return avisoGuardado(almacen.config().pastor ? "Nombre guardado" : "Nombre borrado");
   }
   if (f.id === "f-pantalla") {
     const codigo = normalizarCodigo($("#c-pantalla").value);
