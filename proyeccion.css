@@ -17,6 +17,24 @@ body.con-panel{cursor:default} /* con el panel F2 abierto el cursor se ve */
 .texto .relleno .de{font-size:.45em;color:var(--oro);letter-spacing:.1em;margin-left:.2em}
 .texto.aviso-texto{font-size:48px;opacity:.9}
 .pie{margin-top:auto;padding-top:30px;font-size:30px;font-weight:600;letter-spacing:.2em;text-transform:uppercase}
+/* Láminas del bosquejo (#bosq usa la misma .caja: 96 arriba, 84 abajo, 1170 de ancho). Medidas de las maquetas v2 y v3b a 1920 px.
+   pantalla.js mide .b-enc y .b-ref (más B_ZONA_ARRIBA y B_REF_ABAJO, que deben coincidir con el padding de .b-zona y el margen de .b-ref). */
+.b-eti{font-size:22px;letter-spacing:.2em;text-transform:uppercase;font-weight:600;opacity:.9;margin-bottom:23px}
+.b-enc{display:flow-root}
+.b-punto{display:flex;align-items:flex-start;gap:27px;font-size:60px;font-weight:700;line-height:1.2;text-shadow:0 2px 18px rgba(0,0,0,.55)}
+.b-num{flex:none;width:84px;height:84px;border-radius:50%;background:var(--oro);color:#1d1300;font-size:46px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:-6px;text-shadow:none}
+.b-zona{flex:1;min-height:0;display:flex;padding-top:24px}
+.b-vers{margin:auto;width:fit-content;max-width:100%}
+.b-ref{font-family:"Playfair Display",serif;font-style:italic;font-weight:500;font-size:58px;line-height:1.1;color:var(--ambar);margin-bottom:14px;
+  text-shadow:0 0 36px rgba(255,150,40,.65),0 0 10px rgba(255,170,70,.35),0 2px 4px rgba(0,0,0,.6)}
+.b-texto.aviso-texto{font-size:44px}
+.b-centro{margin:auto 0}
+.b-fecha{font-size:30px;letter-spacing:.2em;text-transform:uppercase;font-weight:600;margin-bottom:24px}
+.b-titulo{font-family:"Playfair Display",serif;font-style:italic;font-weight:500;font-size:88px;line-height:1.12;color:var(--ambar);
+  text-shadow:0 0 36px rgba(255,150,40,.65),0 0 10px rgba(255,170,70,.35),0 2px 4px rgba(0,0,0,.6)}
+.b-cita{margin-top:30px;font-size:44px;font-weight:500;opacity:.9;text-shadow:0 2px 18px rgba(0,0,0,.55)}
+.b-frase{font-size:64px;font-weight:600;line-height:1.3;text-shadow:0 2px 18px rgba(0,0,0,.55)}
+.b-centro .b-eti{color:var(--oro);opacity:1;margin-bottom:30px}
 /* Cambio suave entre pasajes y partes */
 .caja.entra,.espera.entra{animation:entra .4s ease-out}
 @keyframes entra{from{opacity:0}to{opacity:1}}

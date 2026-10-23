@@ -7,6 +7,8 @@ import { repartir, refDeParte } from "./partes.js";
 import { generarCodigo, temaDe, crearOrden, msgEstado, paraArrancar, crearRecargaDiferida } from "./mensajes.js";
 import { crearCanal, recientesHastaLograr } from "./canal.js";
 import { esc, aviso } from "../ui.js";
+import { laminasDe } from "../bosquejo/modelo.js";
+import { htmlTitulo, htmlRecuerda, htmlPunto, htmlEncabezado, TAMANOS_BOSQUEJO } from "./lamina-bosquejo.js";
 
 const CLAVE = "uc-pantalla-v1", N_FONDOS = 11;
 const $ = s => document.querySelector(s);
@@ -23,7 +25,9 @@ function leerConf() {
 function guardarConf(c) { try { localStorage.setItem(CLAVE, JSON.stringify(c)); } catch { /* sin almacenamiento */ } return c; }
 
 let conf = leerConf(), canal = null, cerrarCanal = null, orden = crearOrden(), cola = Promise.resolve();
-let actual = null; // { codigo, refBase, partes, tam, parte, sigla, completo, sinTexto, error }
+// Lo que está en pantalla. De un pasaje: { codigo, refBase, partes, tam, parte, sigla, completo, sinTexto, error }.
+// De una lámina del bosquejo: igual pero sin codigo y con bosq: { pub, i, lam, aviso } (pub = bosquejo público, i = índice en laminasDe).
+let actual = null;
 let conectado = null, fallaRecientes = false, gen = 0, cargando = false, ultimoAvisoReloj = 0;
 const recarga = crearRecargaDiferida(() => location.reload());
 function escalar() { document.documentElement.style.setProperty("--s", Math.min(innerWidth / 1920, innerHeight / 1080)); }
@@ -55,12 +59,27 @@ function repartirMidiendo(bloques, refBase, pie) {
   return r;
 }
 
+// Un punto del bosquejo reparte su versículo midiendo igual, pero con el encabezado del punto arriba y la referencia más chica.
+// B_ZONA_ARRIBA y B_REF_ABAJO son el padding de .b-zona y el margen de .b-ref en proyeccion.css.
+const B_ZONA_ARRIBA = 24, B_REF_ABAJO = 14;
+function repartirBosq(bloques, refBase, pie, pub, p) {
+  const mEnc = $("#m-enc"), mRef = $("#m-bref"), mPie = $("#m-pie"), med = $("#medida");
+  mEnc.innerHTML = htmlEncabezado(pub, p);
+  mRef.textContent = etiquetaRef(refBase);
+  mPie.textContent = `${pie} · 10 de 10`; // con lugar para el contador de partes
+  const disponible = 1080 - 96 - 84 - mEnc.offsetHeight - B_ZONA_ARRIBA - mRef.offsetHeight - B_REF_ABAJO - mPie.offsetHeight;
+  const cabe = (bs, tam) => { med.style.fontSize = tam + "px"; med.innerHTML = htmlBloques(bs); return med.scrollHeight <= disponible; };
+  return repartir(bloques, cabe, TAMANOS_BOSQUEJO);
+}
+
 // Vuelve a disparar el fundido suave de la lámina o de la espera.
 function entrar(el) { el.classList.remove("entra"); void el.offsetWidth; el.classList.add("entra"); }
-function verLamina() { $("#escenario").classList.remove("en-espera"); $("#espera").hidden = true; $("#lamina").hidden = false; entrar($("#lamina")); }
+function verLamina() { $("#escenario").classList.remove("en-espera"); $("#espera").hidden = true; $("#bosq").hidden = true; $("#lamina").hidden = false; entrar($("#lamina")); }
+function verBosq() { $("#escenario").classList.remove("en-espera"); $("#espera").hidden = true; $("#lamina").hidden = true; $("#bosq").hidden = false; entrar($("#bosq")); }
+const hayLamina = () => !$("#lamina").hidden || !$("#bosq").hidden;
 function mostrarEspera() {
   const ya = !$("#espera").hidden;
-  $("#lamina").hidden = true; $("#espera").hidden = false; $("#escenario").classList.add("en-espera");
+  $("#lamina").hidden = true; $("#bosq").hidden = true; $("#espera").hidden = false; $("#escenario").classList.add("en-espera");
   if (!ya) entrar($("#espera"));
   recarga.alEspera();
 }
@@ -70,17 +89,36 @@ function mostrarMensaje(ref, texto) {
   const t = $("#texto"); t.className = "texto aviso-texto"; t.style.fontSize = ""; t.textContent = texto;
 }
 function dibujar() {
+  if (actual.bosq) return dibujarBosq();
   const { refBase, partes, tam, parte, pie } = actual;
   verLamina();
   $("#ref").textContent = partes.length > 1 ? refDeParte(refBase, partes[parte]) : etiquetaRef(refBase);
   $("#pie").textContent = partes.length > 1 ? `${pie} · ${parte + 1} de ${partes.length}` : pie ?? "";
   const t = $("#texto"); t.className = "texto"; t.style.fontSize = tam + "px"; t.innerHTML = htmlBloques(partes[parte]);
 }
-// Le cuenta a la tablet qué hay en pantalla: código, partes, versión, si faltan versículos y si hubo un error.
+// Dibuja una lámina del bosquejo en #bosq: título, punto (con su versículo o el aviso) o ¡Recuerda!.
+function dibujarBosq() {
+  const { bosq, refBase, partes, tam, parte, pie } = actual;
+  const { pub, lam, aviso } = bosq;
+  let html;
+  if (lam.tipo === "titulo") html = htmlTitulo(pub);
+  else if (lam.tipo === "recuerda") html = htmlRecuerda(pub);
+  else if (lam.v === null) html = htmlPunto(pub, lam.p); // un punto sin versículos: solo el encabezado
+  else {
+    const piePartes = partes.length > 1 ? `${pie} · ${parte + 1} de ${partes.length}` : pie ?? "";
+    if (!refBase) html = htmlPunto(pub, lam.p, { aviso, pie: piePartes }); // sin Biblia cargada
+    else if (aviso) html = htmlPunto(pub, lam.p, { ref: etiquetaRef(refBase), aviso, pie: piePartes });
+    else html = htmlPunto(pub, lam.p, { ref: partes.length > 1 ? refDeParte(refBase, partes[parte]) : etiquetaRef(refBase), cuerpo: htmlBloques(partes[parte]), tam, pie: piePartes });
+  }
+  $("#bosq").innerHTML = html;
+  verBosq();
+}
+// Le cuenta a la tablet qué hay en pantalla: código (o bosquejo y lámina), partes, versión, si faltan versículos y si hubo un error.
 function publicarEstado() {
   if (!actual || !canal) return;
-  const { codigo, partes, parte, sigla, completo, sinTexto, error } = actual;
-  enviarEstado({ codigo, partes: partes.length, parte, sigla, completo, sinTexto, error });
+  const { codigo, bosq, partes, parte, sigla, completo, sinTexto, error } = actual;
+  if (bosq) enviarEstado({ bosquejo: bosq.pub.id, lamina: bosq.i, partes: partes.length, parte, sigla, sinTexto, error });
+  else enviarEstado({ codigo, partes: partes.length, parte, sigla, completo, sinTexto, error });
 }
 function enviarEstado(estado) {
   canal?.publicar(msgEstado(estado)).catch(e => console.warn("No se pudo avisar a la tablet", e));
@@ -110,10 +148,45 @@ async function mostrarPasaje(m) {
   publicarEstado();
 }
 
+// Calcula una lámina del bosquejo sin tocar lo que se ve (igual que prepararPasaje). Título y ¡Recuerda! no necesitan Biblia;
+// un punto con versículos carga el que toca (nunca más de uno por lámina). Devuelve el estado nuevo.
+async function prepararLamina(m) {
+  const pub = m.bosquejo, lam = laminasDe(pub)[m.i];
+  if (!lam) throw new Error(`El bosquejo no tiene la lámina ${m.i}`);
+  const bosq = { pub, i: m.i, lam };
+  const base = { bosq, refBase: null, partes: [[]], tam: TAMANOS_BOSQUEJO[0], parte: 0, sigla: m.sigla, sinTexto: 0, error: undefined };
+  if (lam.tipo !== "punto" || lam.v === null) return { actual: base };
+  const codigos = pub.puntos[lam.p].versos, ref = refDeCodigo(codigos[lam.v]);
+  if (!ref) throw new Error(`Versículo inválido: ${codigos[lam.v]}`);
+  const { actual: sigla, versiones: ms, pasaje: r } = await cargarPasaje(biblias, ref, m.sigla, false);
+  if (!sigla) return { actual: { ...base, sigla: undefined, error: "biblia", bosq: { ...bosq, aviso: "Carga una Biblia (F2)" } } };
+  const nombre = ms.find(v => v.sigla === sigla)?.nombre || sigla;
+  const pie = codigos.length > 1 ? `${nombre} · versículo ${lam.v + 1} de ${codigos.length}` : nombre;
+  const sinTexto = r.sinTexto.length;
+  if (!r.bloques.length) return { actual: { ...base, sigla, refBase: ref, pie, sinTexto, bosq: { ...bosq, aviso: "Este versículo no está en las Biblias cargadas" } } };
+  const { tam, partes } = repartirBosq(r.bloques, ref, pie, pub, lam.p);
+  return { actual: { ...base, sigla, refBase: ref, partes, tam, pie, sinTexto, parte: Math.min(m.parte, partes.length - 1) } };
+}
+
+async function mostrarLamina(m) {
+  const p = await prepararLamina(m);
+  // Recién ahora se toca lo que ve la congregación. El fondo cambia solo cuando empieza otro bosquejo, no de lámina en lámina.
+  if (conf.rotar && actual?.bosq?.pub.id !== m.bosquejo.id) { conf = guardarConf({ ...conf, fondo: conf.fondo % N_FONDOS + 1 }); pintarFondo(); }
+  actual = p.actual;
+  dibujar();
+  publicarEstado();
+}
+
 // Si algo falla al mostrar, la lámina lo dice con sobriedad y la tablet se entera.
 function falloAlMostrar(m, e) {
   console.error("No se pudo mostrar", e);
   try {
+    const bosq = m.tipo === "lamina" ? { pub: m.bosquejo, i: m.i } : actual?.bosq;
+    if (bosq) {
+      mostrarMensaje("", "No se pudo mostrar esta lámina");
+      actual = { bosq, refBase: null, partes: [[]], parte: 0, tam: 48, sigla: m.sigla ?? actual?.sigla, sinTexto: 0, error: "mostrar" };
+      return publicarEstado();
+    }
     const codigo = m.tipo === "pasaje" ? m.codigo : actual?.codigo;
     mostrarMensaje("", "No se pudo mostrar este pasaje");
     if (!codigo) return;
@@ -138,6 +211,7 @@ async function aplicar(m) {
   if (m.de !== "tablet") return;
   if (!orden(m)) return avisarReloj();
   if (m.tipo === "pasaje") return mostrarPasaje(m);
+  if (m.tipo === "lamina") return mostrarLamina(m);
   if (m.tipo === "parte") return irAParte(Math.min(m.parte, (actual?.partes.length ?? 1) - 1));
   if (m.tipo === "espera") { actual = null; mostrarEspera(); }
   if (m.tipo === "consulta") contestarConsulta();
@@ -244,7 +318,7 @@ if ("serviceWorker" in navigator) {
   // La PC de la iglesia nadie la toca: cuando llega una versión nueva, se recarga sola (si ya había una funcionando),
   // pero nunca con un pasaje en pantalla: si lo hay, espera a que pase a la lámina de espera.
   const habia = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.addEventListener("controllerchange", () => { if (habia) recarga.nuevaVersion(!$("#lamina").hidden); });
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (habia) recarga.nuevaVersion(hayLamina()); });
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 conectar();
