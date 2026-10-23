@@ -1,6 +1,6 @@
 // Canal en tiempo real entre la tablet y la pantalla, por ntfy.sh (gratuito, con CORS y SSE).
 // fetch, EventSource y el reloj se inyectan para probar sin red ni esperar.
-import { leer } from "./mensajes.js";
+import { leer as leerMensaje } from "./mensajes.js";
 
 const ESPERAS = [1000, 2000, 5000, 10000, 30000]; // espera creciente entre reconexiones (la última es el tope)
 
@@ -20,7 +20,9 @@ function senalConLimite(ms, st, ct, propio) {
   return { signal: c.signal, fin: () => ct(id) };
 }
 
-export function crearCanal(tema, { fetch: f, EventSource: ES, base = "https://ntfy.sh", setTimeout: stp, clearTimeout: ctp, ahora = () => Date.now(),
+// `leer` convierte el texto de cada mensaje en un mensaje válido (o null): el tema de la pantalla usa el de mensajes.js
+// y el del teléfono usa otro, así cada tema tiene su propio formato sin tocar el de la pantalla.
+export function crearCanal(tema, { leer = leerMensaje, fetch: f, EventSource: ES, base = "https://ntfy.sh", setTimeout: stp, clearTimeout: ctp, ahora = () => Date.now(),
   plazo = 8000, esperas = ESPERAS, silencio = 90000, revision = 10000 } = {}) {
   const url = `${base}/${tema}`;
   const propio = !!(stp || ctp);
