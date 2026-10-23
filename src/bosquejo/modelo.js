@@ -100,3 +100,31 @@ export function domingoParaBosquejo(domingos, b) {
   const conflicto = suyas.length > 0 && (suyas.length !== mias.length || suyas.some((c, i) => c !== mias[i]));
   return { domingo, conflicto };
 }
+
+// Deja el domingo de la fecha del bosquejo `b` (ya guardado) con su título y sus citas, y anota su id en el bosquejo.
+// Si ese domingo ya tenía otras citas, `preguntar()` decide: true = reemplazarlas, false = dejar las del domingo.
+// `almacen` es el de datos.js. Devuelve { domingoId (null si no se pudo), conflicto, reemplazo }.
+export async function unirDomingo(almacen, b, { preguntar }) {
+  const { domingo, conflicto } = domingoParaBosquejo(almacen.domingos(), b);
+  let citas = citasDe(b), reemplazo = true;
+  if (conflicto && !await preguntar()) { citas = domingo.citas; reemplazo = false; }
+  const domingoId = almacen.guardarDomingo({ id: domingo?.id, fecha: b.fecha, titulo: b.titulo || domingo?.titulo || "", citas });
+  if (domingoId) almacen.guardarBosquejo({ ...b, domingoId });
+  return { domingoId, conflicto, reemplazo };
+}
+
+// Guarda en la tablet un bosquejo que llegó del teléfono, sin preguntar nada. Estados:
+//  "repetido": ya estaba (mismo id con igual o más reciente `actualizado`): no se toca ni se anuncia;
+//  "guardado": quedó guardado y unido al domingo (`conflicto`: las citas del domingo eran otras y se dejaron);
+//  "sin_espacio": no quedó escrito en la tablet; "invalido": no se pudo guardar.
+export async function recibirBosquejo(almacen, b) {
+  const ya = almacen.bosquejos().find(x => x.id === b.id);
+  if (ya && ya.actualizado >= b.actualizado) return { estado: "repetido" };
+  // El domingoId del teléfono no vale aquí: se conserva el de esta tablet, si lo había.
+  const id = almacen.guardarBosquejo({ ...b, domingoId: ya?.domingoId ?? null });
+  if (!id) return { estado: "invalido" };
+  if (!almacen.persistido()) return { estado: "sin_espacio" };
+  const r = await unirDomingo(almacen, almacen.bosquejos().find(x => x.id === id), { preguntar: async () => false });
+  if (!almacen.persistido()) return { estado: "sin_espacio" };
+  return { estado: "guardado", id, titulo: b.titulo, conflicto: r.conflicto && !r.reemplazo, domingoId: r.domingoId };
+}

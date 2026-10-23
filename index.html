@@ -70,6 +70,15 @@
       <div class="acciones acciones-dlg"><button value="ok" class="btn pri">Aceptar</button><button value="cancelar" class="btn">Cancelar</button></div>
     </form>
   </dialog>
+  <dialog id="dlg-tablet">
+    <form method="dialog" id="f-tablet">
+      <h3>Código de la tablet</h3>
+      <p class="sub">En la tablet: Configuración, tarjeta «Teléfono». Por ejemplo UC-7K4P-9QX2</p>
+      <input id="tablet-campo" maxlength="20" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="Código de la tablet">
+      <p id="tablet-error" class="sub" role="alert" hidden>Ese código no es válido. Cópialo de la tablet.</p>
+      <div class="acciones acciones-dlg"><button value="ok" class="btn pri">Guardar</button><button value="cancelar" class="btn">Cancelar</button></div>
+    </form>
+  </dialog>
   <div id="actualizar" class="actualizar" hidden>Hay una versión nueva · <button class="btn pri" id="b-actualizar">Actualizar</button></div>
   <div id="aviso" class="aviso" role="status" hidden></div>
   <script type="module" src="app.js"></script>

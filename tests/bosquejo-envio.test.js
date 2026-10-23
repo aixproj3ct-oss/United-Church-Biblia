@@ -5,6 +5,9 @@ import { trozos, leerEnvio, enviarBosquejo, crearReceptor } from "../src/bosquej
 import { sanearBosquejo } from "../src/bosquejo/modelo.js";
 import { crearCanal, errorCanal } from "../src/proyeccion/canal.js";
 import { temaDe } from "../src/proyeccion/mensajes.js";
+import { crearAlmacen } from "../src/datos.js";
+import { recibirBosquejo, unirDomingo } from "../src/bosquejo/modelo.js";
+import { mensajeRecibido } from "../src/bosquejo/envio.js";
 
 const COD = "UC-ABCD-2345", OTRO = "UC-ABCD-2346";
 
@@ -211,4 +214,65 @@ test("el canal con leer propio entrega los mensajes del teléfono, en escuchar y
   const f = async () => ({ ok: true, status: 200, text: async () => texto });
   assert.deepEqual((await crearCanal("t", { fetch: f, leer: leerEnvio }).recientes("telefono")).map(m => m.envio), ["e1"]);
   assert.deepEqual(await crearCanal("t", { fetch: f }).recientes("telefono"), []);
+});
+
+// --- Recibir en la tablet: guardar, unir al domingo y no repetir ---
+const memoria = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
+const llegado = (extra = {}) => ({ ...ejemplo(), domingoId: "ajeno", actualizado: "2026-10-23T10:00:00.000Z", ...extra });
+const almacenEn = hora => crearAlmacen(memoria(), () => new Date(hora));
+
+test("recibir un bosquejo cuyo id ya existe lo reemplaza", async () => {
+  const a = almacenEn("2026-10-23T09:00:00Z");
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "guardado");
+  assert.equal(a.bosquejos().length, 1);
+  // el domingo del teléfono no vale en la tablet: se une al de esa fecha
+  assert.notEqual(a.bosquejos()[0].domingoId, "ajeno");
+  assert.equal(a.domingos().length, 1);
+  const r = await recibirBosquejo(a, llegado({ titulo: "Otro título", actualizado: "2026-10-23T11:00:00.000Z" }));
+  assert.equal(r.estado, "guardado");
+  assert.equal(a.bosquejos().length, 1);
+  assert.equal(a.bosquejos()[0].titulo, "Otro título");
+  assert.equal(a.domingos().length, 1);
+  assert.equal(a.domingos()[0].titulo, "Otro título");
+});
+
+test("un mensaje viejo del historial no duplica ni se anuncia otra vez", async () => {
+  const a = almacenEn("2026-10-23T12:00:00Z"); // la tablet lo guardó a las 12:00
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "guardado");
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "repetido");
+  assert.equal((await recibirBosquejo(a, llegado({ titulo: "Más viejo", actualizado: "2026-10-23T08:00:00.000Z" }))).estado, "repetido");
+  assert.equal(a.bosquejos().length, 1);
+  assert.equal(a.bosquejos()[0].titulo, "Salvos por gracia");
+});
+
+test("recibir con conflicto de citas deja las del domingo y lo avisa", async () => {
+  const a = almacenEn("2026-10-23T09:00:00Z");
+  a.guardarDomingo({ fecha: "2026-10-25", titulo: "Mío", citas: [{ codigo: "JHN.3.16", etiqueta: "Juan 3:16" }] });
+  const r = await recibirBosquejo(a, llegado());
+  assert.equal(r.estado, "guardado");
+  assert.equal(r.conflicto, true);
+  assert.deepEqual(a.domingos()[0].citas.map(c => c.codigo), ["JHN.3.16"]);
+  assert.equal(a.bosquejos()[0].domingoId, a.domingos()[0].id);
+});
+
+test("recibir sin espacio no dice guardado y deja reprocesar", async () => {
+  const lleno = { getItem: () => null, setItem: () => { throw new Error("cuota"); } };
+  const a = crearAlmacen(lleno, () => new Date("2026-10-23T09:00:00Z"));
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "sin_espacio");
+});
+
+test("unirDomingo: con conflicto pregunta y respeta la respuesta", async () => {
+  const a = almacenEn("2026-10-23T09:00:00Z");
+  a.guardarDomingo({ fecha: "2026-10-25", titulo: "Mío", citas: [{ codigo: "JHN.3.16", etiqueta: "Juan 3:16" }] });
+  const id = a.guardarBosquejo({ ...llegado(), domingoId: null });
+  let preguntas = 0;
+  await unirDomingo(a, a.bosquejos().find(b => b.id === id), { preguntar: async () => { preguntas++; return true; } });
+  assert.equal(preguntas, 1);
+  assert.deepEqual(a.domingos()[0].citas.map(c => c.codigo), ["EPH.2.8"]);
+});
+
+test("la confirmación de la tablet es la que valida leerEnvio", () => {
+  const m = mensajeRecibido("e9", 123);
+  assert.deepEqual(m, { v: 1, de: "tablet", tipo: "recibido", envio: "e9", t: 123 });
+  assert.deepEqual(leerEnvio(JSON.stringify(m)), m);
 });

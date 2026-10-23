@@ -7,7 +7,7 @@ const CLAVE = "uc-biblia-v1";
 const MAX_HISTORIAL = 30;
 
 const vacio = () => ({ version: 1, domingos: [], favoritos: [], historial: [], bosquejos: [],
-  config: { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal", pastor: "" } });
+  config: { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, telefono: null, destino: null, orientacion: "horizontal", pastor: "" } });
 
 export const LETRAS = ["normal", "grande", "muy-grande"];
 const TEMAS = ["claro", "oscuro"];
@@ -19,6 +19,10 @@ export const sanearConfig = c => {
     ultimoRespaldo: typeof o.ultimoRespaldo === "string" ? o.ultimoRespaldo : null,
     tema: TEMAS.includes(o.tema) ? o.tema : "claro",
     pantalla: normalizarCodigo(o.pantalla),
+    // Bosquejo por teléfono: `telefono` es el código que muestra esta tablet (recibe); `destino`, el de la tablet a la que
+    // este aparato envía. Ninguno viaja en la copia de respaldo.
+    telefono: normalizarCodigo(o.telefono),
+    destino: normalizarCodigo(o.destino),
     orientacion: ORIENTACIONES.includes(o.orientacion) ? o.orientacion : "horizontal",
     // Cómo saludar al pastor ("Buenos días, <esto>"), tal como lo escribe; texto corto, sin saltos de línea.
     pastor: typeof o.pastor === "string" ? o.pastor.replace(/\s+/g, " ").trim().slice(0, 40) : "",
@@ -167,9 +171,9 @@ export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () =>
     config: () => ({ ...e.config }),
     guardarConfig(parcial) { e.config = sanearConfig({ ...e.config, ...parcial }); return guardar(); },
     // La copia se arma sin marcar la fecha: se marca con marcarRespaldo() solo cuando compartir o descargar terminó.
-    // No lleva el código de la pantalla: cada tablet conserva el suyo.
+    // No lleva el código de la pantalla ni los del teléfono: cada aparato conserva los suyos.
     exportar() {
-      const { pantalla, ...config } = e.config;
+      const { pantalla, telefono, destino, ...config } = e.config;
       return JSON.stringify({ ...e, config, exportado: reloj().toISOString() }, null, 1);
     },
     marcarRespaldo() { e.config.ultimoRespaldo = reloj().toISOString(); return guardar(); },
@@ -186,8 +190,8 @@ export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () =>
       n.bosquejos = bq.ok;
       const descartados = antes - (n.domingos.length + n.favoritos.length + n.historial.length) + bq.descartados;
       n.historial = n.historial.slice(0, MAX_HISTORIAL);
-      // El código de pantalla que traiga el archivo se ignora: la tablet conserva el suyo.
-      n.config = { ...sanearConfig(n.config), pantalla: e.config.pantalla };
+      // Los códigos que traiga el archivo se ignoran: la tablet conserva los suyos.
+      n.config = { ...sanearConfig(n.config), pantalla: e.config.pantalla, telefono: e.config.telefono, destino: e.config.destino };
       // Antes de reemplazar, se guarda una copia de lo actual por si la copia importada era vieja.
       escribirCopia(storage, PREF_ANTES, reloj().toISOString(), JSON.stringify(e));
       e = n;

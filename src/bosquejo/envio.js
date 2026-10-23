@@ -26,6 +26,9 @@ export function validarEnvio(m) {
   return null;
 }
 
+// La confirmación que la tablet publica cuando guardó el bosquejo del envío `envio`.
+export const mensajeRecibido = (envio, t) => ({ v: 1, de: "tablet", tipo: "recibido", envio, t });
+
 export function leerEnvio(texto) {
   try { return validarEnvio(JSON.parse(texto)); } catch { return null; }
 }

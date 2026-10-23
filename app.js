@@ -6,11 +6,14 @@ import { cargarBiblia, ErrorBiblia } from "./src/importar.js";
 import { refDeCodigo, etiquetaRef, codigoRef, abreviatura } from "./src/pasaje.js";
 import { LIBROS } from "./src/libros.js";
 import { nuevaLectura, seguirProyeccion } from "./src/lectura.js";
-import { normalizarCodigo } from "./src/proyeccion/mensajes.js";
+import { normalizarCodigo, generarCodigo } from "./src/proyeccion/mensajes.js";
+import { crearCanal, recientesHastaLograr } from "./src/proyeccion/canal.js";
+import { claveDe, temaTelefono } from "./src/bosquejo/cifrado.js";
+import { leerEnvio, enviarBosquejo, crearReceptor, mensajeRecibido } from "./src/bosquejo/envio.js";
 import { armarIndiceDesde, buscar, fichas, palabrasResaltar } from "./src/busqueda.js";
 import { proximoDomingo, fechaLarga, fechaCorta } from "./src/fechas.js";
 import { esc, aviso } from "./src/ui.js";
-import { citasDe, domingoParaBosquejo, MAX_PUNTOS } from "./src/bosquejo/modelo.js";
+import { MAX_PUNTOS, unirDomingo, recibirBosquejo } from "./src/bosquejo/modelo.js";
 import { vistaListaBosquejos, vistaFormBosquejo, revisarCrudo } from "./src/bosquejo/vistas.js";
 import { crearPresentacion, vistaPresentar, htmlContenido, htmlReloj } from "./src/bosquejo/presentar.js";
 import { LETRAS } from "./src/datos.js";
@@ -88,6 +91,19 @@ function pedirSigla() {
     if (dlg.open) return res("");
     campo.value = ""; dlg.returnValue = "cancelar";
     const fin = () => { dlg.removeEventListener("close", fin); res(dlg.returnValue === "ok" ? campo.value.trim().slice(0, 20) : ""); };
+    dlg.addEventListener("close", fin);
+    dlg.showModal();
+  });
+}
+
+// Pide el código de la tablet con su diálogo (como pedirSigla). Devuelve el código ya normalizado, o "" si se cancela.
+// El diálogo no se cierra con un código mal escrito (el control está en el envío del formulario).
+function pedirCodigoTablet() {
+  return new Promise(res => {
+    const dlg = $("#dlg-tablet"), campo = $("#tablet-campo");
+    if (dlg.open) return res("");
+    campo.value = ""; $("#tablet-error").hidden = true; dlg.returnValue = "cancelar";
+    const fin = () => { dlg.removeEventListener("close", fin); res(dlg.returnValue === "ok" ? normalizarCodigo(campo.value) ?? "" : ""); };
     dlg.addEventListener("close", fin);
     dlg.showModal();
   });
@@ -288,7 +304,7 @@ function revisarFormBq() {
 // Vuelve a dibujar el formulario con lo escrito (al agregar o quitar un punto, o al recuperar un borrador), sin tocar la base de cambios.
 function repintarFormBq(crudo) {
   const y = $("#vista").scrollTop;
-  $("#vista").innerHTML = vistaFormBosquejo(bosquejoActual(), { maxPuntos: MAX_PUNTOS, crudo });
+  $("#vista").innerHTML = vistaFormBosquejo(bosquejoActual(), { maxPuntos: MAX_PUNTOS, crudo, presentar: bosquejoActual() ? botonPresentar(bosquejoActual()) : "", enviar: htmlEnviar() });
   $("#vista").scrollTop = y; revisarFormBq();
 }
 const mismoCrudo = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -322,7 +338,7 @@ function vistaBosquejo() {
   if (!editandoB) return `${saludo()}${vistaListaBosquejos(almacen.bosquejos())}`;
   const b = bosquejoActual();
   if (!b) bosquejoSel = null; // el bosquejo ya no existe (p. ej. se restauró una copia): se trata como uno nuevo
-  return vistaFormBosquejo(b, { maxPuntos: MAX_PUNTOS, presentar: b ? botonPresentar(b) : "" });
+  return vistaFormBosquejo(b, { maxPuntos: MAX_PUNTOS, presentar: b ? botonPresentar(b) : "", enviar: htmlEnviar() });
 }
 
 // ---------- Presentar el bosquejo ----------
@@ -379,28 +395,104 @@ async function quitarPresentacion() {
 }
 
 // Guarda el bosquejo y deja el domingo de esa fecha con su título y sus citas (si ya tenía otras, antes pregunta).
-async function guardarBosquejoForm(form) {
-  if (guardandoBq) return;
+// `cerrar: false` (al enviar a la tablet) deja el formulario abierto. Devuelve true si el bosquejo quedó guardado.
+async function guardarBosquejoForm(form, { cerrar = true } = {}) {
+  if (guardandoBq) return false;
   const r = revisarFormBq();
-  if (!r || r.malo) return;
+  if (!r || r.malo) return false;
   guardandoBq = true;
   try {
     const id = almacen.guardarBosquejo(leerFormBosquejo(form));
-    if (!id) return aviso("Ese bosquejo no se puede guardar: revisa la fecha y los puntos.", 6000);
+    if (!id) { aviso("Ese bosquejo no se puede guardar: revisa la fecha y los puntos.", 6000); return false; }
     bosquejoSel = id;
     // Sin espacio: el formulario queda abierto con lo escrito (y el borrador) para reintentar; no se dice "guardado".
-    if (!almacen.persistido()) return aviso(`${SIN_ESPACIO}. Lo que escribiste sigue aquí.`, 8000);
-    const b = bosquejoActual();
-    const { domingo, conflicto } = domingoParaBosquejo(almacen.domingos(), b);
-    let citas = citasDe(b);
-    if (conflicto && !await confirmar("Las citas de ese domingo son distintas a las del bosquejo. ¿Reemplazarlas?", "Sí, reemplazar", "Dejar las del domingo")) citas = domingo.citas;
-    const domingoId = almacen.guardarDomingo({ id: domingo?.id, fecha: b.fecha, titulo: b.titulo || domingo?.titulo || "", citas });
+    if (!almacen.persistido()) { aviso(`${SIN_ESPACIO}. Lo que escribiste sigue aquí.`, 8000); return false; }
+    const { domingoId } = await unirDomingo(almacen, bosquejoActual(),
+      { preguntar: () => confirmar("Las citas de ese domingo son distintas a las del bosquejo. ¿Reemplazarlas?", "Sí, reemplazar", "Dejar las del domingo") });
     if (!domingoId) aviso("El bosquejo se guardó, pero no se pudo actualizar el domingo.", 7000);
-    else almacen.guardarBosquejo({ ...b, domingoId });
-    if (!almacen.persistido()) return aviso(`${SIN_ESPACIO}. Lo que escribiste sigue aquí.`, 8000);
-    borrarBorradorBq(); editandoB = false; pintar(); $("#vista").scrollTop = 0;
-    if (domingoId) avisoGuardado("Bosquejo guardado");
+    if (!almacen.persistido()) { aviso(`${SIN_ESPACIO}. Lo que escribiste sigue aquí.`, 8000); return false; }
+    borrarBorradorBq();
+    if (cerrar) {
+      editandoB = false; pintar(); $("#vista").scrollTop = 0;
+      if (domingoId) avisoGuardado("Bosquejo guardado");
+    } else { const y = $("#vista").scrollTop; pintar(); $("#vista").scrollTop = y; }
+    return true;
   } finally { guardandoBq = false; }
+}
+
+// ---------- Teléfono: enviar (teléfono) y recibir (tablet) ----------
+// El bosquejo viaja cifrado con el código de la tablet (src/bosquejo/cifrado.js); por ntfy nunca pasa en claro.
+let enviandoBq = false;
+const htmlEnviar = () => `<button type="button" class="btn" id="b-enviar" ${enviandoBq ? "disabled" : ""}>${enviandoBq ? "Enviando…" : "Enviar a la tablet"}</button>`
+  + (almacen.config().destino ? `<button type="button" class="enlace" id="b-cambiar-tablet">Cambiar tablet</button>` : "");
+function pintarBotonEnviar() {
+  const b = $("#b-enviar");
+  if (b) { b.disabled = enviandoBq; b.textContent = enviandoBq ? "Enviando…" : "Enviar a la tablet"; }
+}
+
+async function enviarATablet() {
+  if (enviandoBq) return;
+  const r = revisarFormBq();
+  if (!r) return;
+  if (r.malo) return aviso("Corrige las líneas marcadas con ✗ antes de enviar", 5000);
+  let codigo = almacen.config().destino;
+  if (!codigo) {
+    codigo = await pedirCodigoTablet();
+    if (!codigo) return;
+    if (!almacen.guardarConfig({ destino: codigo })) aviso(SIN_ESPACIO, 7000);
+    pintarBotonEnviar();
+  }
+  enviandoBq = true; pintarBotonEnviar();
+  try {
+    // Primero se guarda (si hay algo nuevo); lo que se envía es lo guardado.
+    if (!bosquejoActual() || hayCambiosBq()) { if (!await guardarBosquejoForm($("#f-bosquejo"), { cerrar: false })) return; }
+    const b = bosquejoActual();
+    if (!b) return;
+    const canal = crearCanal(await temaTelefono(codigo), { leer: leerEnvio });
+    const res = await enviarBosquejo(canal, await claveDe(codigo), b);
+    aviso(res === "confirmado" ? "Enviado a la tablet" : "Enviado: aparecerá cuando abras la app en la tablet (dentro de 12 horas)", res === "confirmado" ? 4000 : 8000);
+  } catch (e) {
+    console.error("Enviar a la tablet:", e);
+    aviso(e?.tipo === "rechazo" ? "No se pudo enviar: el servicio no aceptó el mensaje" : "Sin conexión: no se pudo enviar", 7000);
+  } finally { enviandoBq = false; pintarBotonEnviar(); }
+}
+
+async function cambiarTablet() {
+  const codigo = await pedirCodigoTablet();
+  if (!codigo) return;
+  avisoGuardado(almacen.guardarConfig({ destino: codigo }) && "Tablet cambiada");
+}
+
+// Tablet: escucha el tema del código mientras la app esté abierta y, al abrir, revisa las últimas 12 h.
+let cerrarTelefono = null, generacionTel = 0, colaTel = Promise.resolve();
+async function conectarTelefono() {
+  cerrarTelefono?.(); cerrarTelefono = null;
+  const mia = ++generacionTel; // un código nuevo deja sin efecto todo lo que quedó en vuelo del anterior
+  const codigo = almacen.config().telefono;
+  if (!codigo) return;
+  try {
+    const [clave, tema] = await Promise.all([claveDe(codigo), temaTelefono(codigo)]);
+    if (mia !== generacionTel) return;
+    const canal = crearCanal(tema, { leer: leerEnvio });
+    const receptor = crearReceptor(clave, (b, envio) => alLlegarBosquejo(canal, b, envio));
+    // De uno en uno: dos envíos no se pisan al guardar. Si uno falla, ya se avisó; el siguiente sigue.
+    const procesar = m => { colaTel = colaTel.then(() => (mia === generacionTel ? receptor.recibir(m) : null)).catch(e => console.error("Bosquejo recibido:", e)); };
+    const recientes = async () => { for (const m of await recientesHastaLograr(canal, "telefono", { vigente: () => mia === generacionTel }) ?? []) procesar(m); };
+    cerrarTelefono = canal.escuchar(procesar, undefined, recientes);
+    recientes();
+  } catch (e) { console.error("Conectar el teléfono:", e); }
+}
+
+async function alLlegarBosquejo(canal, b, envio) {
+  const r = await recibirBosquejo(almacen, b);
+  if (r.estado === "sin_espacio") { aviso(SIN_ESPACIO, 8000); throw new Error("Sin espacio para guardar el bosquejo"); }
+  if (r.estado === "invalido") return;
+  // Ya estaba: no se anuncia otra vez, pero se confirma (el teléfono pudo no haber oído la primera confirmación).
+  if (r.estado === "repetido" && !almacen.persistido()) return;
+  canal.publicar(mensajeRecibido(envio, Date.now())).catch(() => { /* sin red: el teléfono dirá que quedó pendiente */ });
+  if (r.estado === "repetido") return;
+  aviso(`Llegó el bosquejo «${r.titulo}» del teléfono${r.conflicto ? ". Las citas del domingo no se cambiaron: revisa el bosquejo" : ""}`, r.conflicto ? 9000 : 6000);
+  if (vista === "bosquejo" && !editandoB) pintar(); // la lista se actualiza sola; si se está editando, no se toca lo escrito
 }
 
 // ---------- Biblia y búsqueda ----------
@@ -544,6 +636,12 @@ function vistaConfig() {
       : `<form id="f-pantalla" class="lin" style="display:grid;gap:10px;border:0"><label class="meta" for="c-pantalla">Código que muestra la pantalla de la iglesia (tecla F2)</label>
         <input id="c-pantalla" class="campo" placeholder="UC-XXXX-XXXX" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="20">
         <div><button class="btn pri peq">Conectar</button></div></form>`}</section>
+    <section class="card"><h2>Teléfono</h2>
+      ${c.telefono ? `<div class="lin meta">Código de esta tablet</div><div class="codigo-tel" id="c-codigo-tel">${esc(c.telefono)}</div>
+        <div class="lin meta">En el teléfono, abre esta app, escribe el bosquejo y toca «Enviar a la tablet». La primera vez te pedirá este código.</div>
+        <div class="acciones"><button type="button" class="btn peq peli" id="c-cambiar-codigo">Cambiar código</button></div>`
+      : `<div class="lin meta">Escribe el bosquejo en el teléfono y recíbelo aquí, listo para presentar.</div>
+        <div class="acciones"><button type="button" class="btn pri peq" id="c-conectar-tel">Conectar un teléfono</button></div>`}</section>
     <section class="card" id="c-versiones"><h2>Versiones de la Biblia</h2><p class="meta">Cargando…</p></section>
     <section class="card"><h2>Copia de respaldo</h2>
       <div class="lin">Última copia <b>${c.ultimoRespaldo ? esc(hace(c.ultimoRespaldo)) : "nunca"}</b></div>
@@ -667,6 +765,17 @@ document.addEventListener("click", async ev => {
   if (t.hasAttribute("data-reintentar")) return reintentar();
   if (d.parte) return cambiarParte(Number(d.parte));
   if (t.hasAttribute("data-quitar-pantalla")) return quitarDePantalla();
+  if (t.id === "b-enviar") return enviarATablet();
+  if (t.id === "b-cambiar-tablet") return cambiarTablet();
+  if (t.id === "c-conectar-tel") {
+    const ok = almacen.guardarConfig({ telefono: generarCodigo() }); conectarTelefono(); pintar();
+    return avisoGuardado(ok && "Listo: escribe este código en el teléfono");
+  }
+  if (t.id === "c-cambiar-codigo") {
+    if (!await confirmar("¿Cambiar el código? El teléfono que usas ahora ya no podrá enviar hasta que le escribas el código nuevo.", "Sí, cambiar", "Cancelar")) return;
+    const ok = almacen.guardarConfig({ telefono: generarCodigo() }); conectarTelefono(); pintar();
+    return avisoGuardado(ok && "Código nuevo listo");
+  }
   if (t.id === "c-desconectar") {
     const queda = proy.activo ? " Lo que está proyectado se queda en la pantalla." : "";
     if (!await confirmar(`¿Desconectar la pantalla de la iglesia?${queda} Tendrás que escribir el código otra vez.`, "Sí, desconectar", "Cancelar")) return;
@@ -834,6 +943,10 @@ document.addEventListener("submit", ev => {
     const ok = almacen.guardarConfig({ pantalla: codigo }); conectarPantalla(); pintar();
     return aviso(ok ? "Pantalla conectada" : "Pantalla conectada, pero no se pudo guardar en la tablet: falta espacio", ok ? 3500 : 7000);
   }
+  if (f.id === "f-tablet") {
+    if (ev.submitter?.value !== "cancelar" && !normalizarCodigo($("#tablet-campo").value)) return ($("#tablet-error").hidden = false);
+    return $("#dlg-tablet").close(ev.submitter?.value === "cancelar" ? "cancelar" : "ok");
+  }
   if (f.id === "f-sigla") $("#dlg-sigla").close(ev.submitter?.value === "cancelar" ? "cancelar" : "ok");
   if (f.id === "f-fav") {
     const guardar = ev.submitter?.value !== "cancelar" && favPendiente;
@@ -909,6 +1022,7 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 conectarPantalla();
+conectarTelefono();
 fijarOrientacion({ callado: true });
 // Si la app se recargó con un pasaje en la pantalla de la iglesia, se vuelve al lector en ese pasaje:
 // así el pastor tiene a mano "Quitar" y "Reintentar" (la barra dice "Sin confirmar" hasta que la PC responda).

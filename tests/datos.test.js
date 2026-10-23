@@ -43,7 +43,7 @@ test("historial: el más reciente primero, sin repetir, máximo 30", () => {
 test("persiste entre instancias y config por defecto", () => {
   const s = memoria();
   const a = crearAlmacen(s);
-  assert.deepEqual(a.config(), { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal", pastor: "" });
+  assert.deepEqual(a.config(), { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, telefono: null, destino: null, orientacion: "horizontal", pastor: "" });
   a.guardarConfig({ nombre: "Pastor Luis" });
 });
 
@@ -127,14 +127,14 @@ test("config se sanea al cargar: tipos inválidos y claves desconocidas", () => 
   m.setItem("uc-biblia-v1", JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: "  ", letra: "enorme", ultimoRespaldo: 5, extra: "x" } }));
   const cfg = crearAlmacen(m).config();
-  assert.deepEqual(cfg, { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, orientacion: "horizontal", pastor: "" });
+  assert.deepEqual(cfg, { letra: "grande", ultimoRespaldo: null, tema: "claro", pantalla: null, telefono: null, destino: null, orientacion: "horizontal", pastor: "" });
 });
 
 test("config se sanea al importar", () => {
   const a = crearAlmacen(memoria());
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [],
     config: { nombre: 42, letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", otro: 1 } }));
-  assert.deepEqual(a.config(), { letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", tema: "claro", pantalla: null, orientacion: "horizontal", pastor: "" });
+  assert.deepEqual(a.config(), { letra: "muy-grande", ultimoRespaldo: "2026-10-05T00:00:00.000Z", tema: "claro", pantalla: null, telefono: null, destino: null, orientacion: "horizontal", pastor: "" });
 });
 
 test("crearAlmacen sin argumentos no lanza si localStorage falla o no existe", () => {
@@ -327,4 +327,26 @@ test("exportar/importar conserva los bosquejos; una copia vieja sin bosquejos se
   const vieja = JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: {} });
   assert.equal(b.importar(vieja), 0);
   assert.deepEqual(b.bosquejos(), []);
+});
+
+test("sanearConfig acepta telefono/destino válidos y descarta basura", () => {
+  const c = sanearConfig({ telefono: "uc-7k4p-9qx2", destino: " UC-ABCD-2345 " });
+  assert.equal(c.telefono, "UC-7K4P-9QX2");
+  assert.equal(c.destino, "UC-ABCD-2345");
+  for (const malo of ["xx", 5, {}, "", null]) {
+    const r = sanearConfig({ telefono: malo, destino: malo });
+    assert.equal(r.telefono, null);
+    assert.equal(r.destino, null);
+  }
+});
+
+test("exportar no lleva telefono ni destino, e importar conserva los de la tablet", () => {
+  const a = crearAlmacen(memoria());
+  a.guardarConfig({ telefono: "UC-7K4P-9QX2", destino: "UC-ABCD-2345" });
+  const copia = a.exportar();
+  assert.ok(!copia.includes("UC-7K4P-9QX2") && !copia.includes("UC-ABCD-2345"));
+  assert.ok(!("telefono" in JSON.parse(copia).config) && !("destino" in JSON.parse(copia).config));
+  a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: { telefono: "UC-ZZZZ-2222", destino: "UC-ZZZZ-3333" } }));
+  assert.equal(a.config().telefono, "UC-7K4P-9QX2");
+  assert.equal(a.config().destino, "UC-ABCD-2345");
 });

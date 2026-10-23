@@ -92,7 +92,7 @@ html[data-tema="oscuro"] .dom-plan .enlace{color:var(--azul)}
 .domingo-mini.sel{border-color:var(--m2);box-shadow:0 0 0 2px var(--m2) inset}
 .form{display:grid;gap:12px;padding:18px 20px}
 .form label{display:grid;gap:6px;color:var(--sub);font-size:15px}
-.form input,.form select,.form textarea,#fav-nueva,#sigla-campo,.campo{font:inherit;font-size:17px;border:1px solid var(--borde-control);border-radius:var(--r1);padding:12px 14px;min-height:50px;color:var(--tinta);background:var(--card)}
+.form input,.form select,.form textarea,#fav-nueva,#sigla-campo,#tablet-campo,.campo{font:inherit;font-size:17px;border:1px solid var(--borde-control);border-radius:var(--r1);padding:12px 14px;min-height:50px;color:var(--tinta);background:var(--card)}
 .form textarea{min-height:170px;resize:vertical}
 .prevista{list-style:none;margin:0;padding:0}.prevista li{padding:4px 0}.prevista .ok{color:var(--ok)}.prevista .mal{color:var(--mal)}
 /* Bosquejo: formulario guiado en partes; cada campo dice si se proyecta o es solo para el pastor */
@@ -270,7 +270,10 @@ html[data-tema="oscuro"] .p-ir.on{background:var(--m2);border-color:var(--m2)}
 dialog{border:0;border-radius:var(--r2);padding:24px;width:min(520px,92vw);background:var(--card);color:var(--tinta);box-shadow:0 30px 80px rgba(15,23,42,.35)}
 dialog::backdrop{background:rgba(7,18,43,.5)}
 dialog h3{margin:0 0 4px}dialog .sub{margin:0 0 6px;color:var(--sub)}
-#fav-nueva,#sigla-campo{width:100%;margin:6px 0 4px}
+#fav-nueva,#sigla-campo,#tablet-campo{width:100%;margin:6px 0 4px}
+#tablet-error{color:#b42318;font-weight:600}
+.codigo-tel{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:.08em;text-align:center;padding:14px 8px;margin:6px 0;border-radius:var(--r1);border:1px dashed var(--borde-control);user-select:all}
+.dom-bq .enlace,#b-enviar+.enlace{margin-left:8px}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 .chip{border:1px solid var(--borde-control);background:var(--card);border-radius:var(--r1);padding:8px 14px;min-height:44px}
 .chip.sel{background:var(--m2);color:#fff;border-color:var(--m2)}
