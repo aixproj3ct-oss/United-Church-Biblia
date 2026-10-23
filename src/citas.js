@@ -107,3 +107,6 @@ export function ordenBiblico(codigo) {
   const [cod, cap, v] = String(codigo).split(".");
   return (numeroLibro(cod) || 999) * 1e6 + (parseInt(cap, 10) || 0) * 1000 + (parseInt(v, 10) || 0);
 }
+
+// Las citas guardadas antes del lector propio traen además `url` (bible.com); se aceptan y se ignora.
+export const validoCita = c => c && typeof c.codigo === "string" && /^[0-9A-Z]{3}\.\d+/.test(c.codigo) && typeof c.etiqueta === "string";

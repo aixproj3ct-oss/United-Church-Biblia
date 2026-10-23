@@ -1,5 +1,7 @@
 // Datos del pastor guardados solo en la tablet (localStorage). Nada sale del dispositivo.
 import { normalizarCodigo } from "./proyeccion/mensajes.js";
+import { validoCita } from "./citas.js";
+import { fechaReal } from "./fechas.js";
 const CLAVE = "uc-biblia-v1";
 const MAX_HISTORIAL = 30;
 
@@ -34,16 +36,6 @@ const almacenamientoPorDefecto = () => {
 const valido = e => e && e.version === 1 && Array.isArray(e.domingos) && Array.isArray(e.favoritos)
   && Array.isArray(e.historial) && e.config && typeof e.config === "object";
 
-// Fecha AAAA-MM-DD que existe de verdad (no 2026-13-45 ni 2026-02-30).
-const fechaReal = f => {
-  if (typeof f !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(f)) return false;
-  const [a, m, d] = f.split("-").map(Number);
-  const dias = [31, a % 4 === 0 && (a % 100 !== 0 || a % 400 === 0) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return a >= 1900 && m >= 1 && m <= 12 && d >= 1 && d <= dias[m - 1];
-};
-
-// Las citas guardadas antes del lector propio traen además `url` (bible.com); se aceptan y se ignora.
-const validoCita = c => c && typeof c.codigo === "string" && /^[0-9A-Z]{3}\.\d+/.test(c.codigo) && typeof c.etiqueta === "string";
 const validoDomingo = d => d && typeof d.id === "string" && fechaReal(d.fecha) && typeof d.titulo === "string" && Array.isArray(d.citas) && d.citas.every(validoCita);
 const validoFavorito = f => f && typeof f.id === "string" && typeof f.serie === "string" && validoCita(f.cita);
 const validoHistorial = h => h && validoCita(h.cita) && typeof h.cuando === "string";
