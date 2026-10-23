@@ -28,7 +28,7 @@ body.con-panel{cursor:default} /* con el panel F2 abierto el cursor se ve */
 .b-ref{font-family:"Playfair Display",serif;font-style:italic;font-weight:500;font-size:58px;line-height:1.1;color:var(--ambar);margin-bottom:14px;
   text-shadow:0 0 36px rgba(255,150,40,.65),0 0 10px rgba(255,170,70,.35),0 2px 4px rgba(0,0,0,.6)}
 .b-texto.aviso-texto{font-size:44px}
-.b-centro{margin:auto 0}
+.b-centro{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center} /* centrado entre el borde de arriba y el pie */
 .b-fecha{font-size:30px;letter-spacing:.2em;text-transform:uppercase;font-weight:600;margin-bottom:24px}
 .b-titulo{font-family:"Playfair Display",serif;font-style:italic;font-weight:500;font-size:88px;line-height:1.12;color:var(--ambar);
   text-shadow:0 0 36px rgba(255,150,40,.65),0 0 10px rgba(255,170,70,.35),0 2px 4px rgba(0,0,0,.6)}

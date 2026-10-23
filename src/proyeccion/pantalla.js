@@ -101,6 +101,7 @@ function dibujarBosq() {
   const { bosq, refBase, partes, tam, parte, pie } = actual;
   const { pub, lam, aviso } = bosq;
   let html;
+  if (!lam) return mostrarMensaje("", "No se pudo mostrar esta lámina"); // estado de error: no hay qué dibujar
   if (lam.tipo === "titulo") html = htmlTitulo(pub);
   else if (lam.tipo === "recuerda") html = htmlRecuerda(pub);
   else if (lam.v === null) html = htmlPunto(pub, lam.p); // un punto sin versículos: solo el encabezado
@@ -181,7 +182,8 @@ async function mostrarLamina(m) {
 function falloAlMostrar(m, e) {
   console.error("No se pudo mostrar", e);
   try {
-    const bosq = m.tipo === "lamina" ? { pub: m.bosquejo, i: m.i } : actual?.bosq;
+    // Un pasaje que falla se reporta como pasaje aunque lo anterior fuera una lámina del bosquejo; lam:null por si algo vuelve a dibujar.
+    const bosq = m.tipo === "lamina" ? { pub: m.bosquejo, i: m.i, lam: null } : m.tipo === "pasaje" ? null : actual?.bosq;
     if (bosq) {
       mostrarMensaje("", "No se pudo mostrar esta lámina");
       actual = { bosq, refBase: null, partes: [[]], parte: 0, tam: 48, sigla: m.sigla ?? actual?.sigla, sinTexto: 0, error: "mostrar" };
