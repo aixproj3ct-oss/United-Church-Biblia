@@ -4,6 +4,10 @@
 UNA SOLA VEZ (instalación)
 1. Clic derecho en "instalar.ps1" -> "Ejecutar con PowerShell".
    Si Windows pide permiso para instalar OBS Studio, acéptalo.
+   El instalador copia el programa a su propia carpeta de tu usuario de Windows
+   (C:\Users\TU-USUARIO\AppData\Local\ProyectarTablet) y el acceso directo del escritorio usa esa copia.
+   Así nadie puede cambiar el programa tocando la carpeta de donde lo instalaste.
+   Si algún día cambias algo de esta carpeta, vuelve a ejecutar instalar.ps1 para actualizar la copia.
 2. Abre el acceso directo "Proyectar tablet" del escritorio.
 3. En la ventana "Proyección United Church" pulsa F2 (panel del operador):
    - Cargar archivo: carga TLA.xml y luego RVR1960.xml (la TLA queda como principal).
@@ -25,7 +29,13 @@ IMPORTANTE
 - No minimices la ventana "Proyección United Church". Puede quedar detrás de EasyWorship.
 - No la maximices ni le cambies el tamaño. Si lo hiciste, vuelve a abrir "Proyectar tablet" y se acomoda sola.
 - La tablet y esta PC necesitan internet (no hace falta que estén en el mismo Wi-Fi).
-- El panel (F2) se ve en la cámara mientras está abierto: úsalo antes del culto o con el Live Video fuera de pantalla.
+- NO dejes el panel F2 abierto durante el culto: muestra el código de conexión y saldría en la pantalla de la iglesia.
+  Ábrelo solo antes del culto (o con el Live Video fuera de pantalla) y ciérralo con F2 otra vez.
+- Si "Proyectar tablet" muestra un aviso (por ejemplo "No pude medir la ventana" o "No pude actualizar la escena de OBS"),
+  el programa se detiene a propósito y OBS no se abre con datos viejos. Lee el aviso, ciérralo y vuelve a abrir
+  "Proyectar tablet". Si se repite, vuelve a ejecutar instalar.ps1.
+- Cada vez que cambia el recorte, el programa guarda la escena anterior de OBS como "Proyectar_tablet.json.bak"
+  (carpeta %APPDATA%\obs-studio\basic\scenes).
 - Teclas en la ventana: F2 panel · flechas izquierda/derecha cambian de parte · Esc pantalla de espera.
 - Si se va internet, la pantalla se queda con el último pasaje y se reconecta sola.
 - La ventana usa su propio perfil de Chrome. Si ese perfil se borra o se crea uno nuevo, empieza sin Biblias

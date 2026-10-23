@@ -5,10 +5,18 @@ import { LIBROS } from "./libros.js";
 const CODIGOS = LIBROS.map(l => l[0]);
 export const numeroLibro = codigo => CODIGOS.indexOf(codigo) + 1;
 
+const MAX_VERSICULO = 176; // el capítulo más largo de la Biblia es el Salmo 119
+
+// Rechaza (null) lo que no existe: capítulos fuera del libro, versículo 0 o mayor de 176, rango al revés.
 export function refDeCodigo(codigo) {
   const m = String(codigo ?? "").match(/^([0-9A-Z]{3})\.(\d+)(?:\.(\d+)(?:-(\d+))?)?$/);
-  if (!m || !numeroLibro(m[1])) return null;
-  return { codigo: m[1], cap: +m[2], v1: m[3] ? +m[3] : null, v2: m[4] ? +m[4] : null };
+  const libro = m && numeroLibro(m[1]);
+  if (!libro) return null;
+  const cap = +m[2], v1 = m[3] ? +m[3] : null, v2 = m[4] ? +m[4] : null;
+  if (cap < 1 || cap > LIBROS[libro - 1][2]) return null;
+  if (v1 !== null && (v1 < 1 || v1 > MAX_VERSICULO)) return null;
+  if (v2 !== null && (v2 > MAX_VERSICULO || v2 < v1)) return null;
+  return { codigo: m[1], cap, v1, v2 };
 }
 
 export function etiquetaRef({ codigo, cap, v1, v2 }) {
@@ -64,7 +72,9 @@ export function armarPasaje({ principal, alternativas = [], desde = null, hasta 
     for (let n = b.desde; n <= b.hasta; n++) cubiertos.add(n);
   }
   const rellenoDe = new Set(), sinTexto = [];
-  for (let n = ini; n <= fin; n++) {
+  // El bucle se acota al capítulo real (o a 176 si ningún archivo lo trae): un rango absurdo no cuelga la pantalla.
+  const tope = Math.min(fin, Math.max(maximo, MAX_VERSICULO, ini));
+  for (let n = ini; n <= tope; n++) {
     if (cubiertos.has(n)) continue;
     const alt = alternativas.find(a => tieneTexto(a.cap, n));
     if (alt) { bloques.push({ desde: n, hasta: n, texto: alt.cap[n], sigla: alt.sigla }); rellenoDe.add(alt.sigla); }

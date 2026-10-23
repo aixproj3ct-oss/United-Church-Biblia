@@ -10,12 +10,13 @@ export function backendMemoria() {
 
 export function backendIndexedDB(nombre = "uc-biblias") {
   let db;
+  // Si la apertura falla no se guarda la promesa rechazada: la siguiente llamada vuelve a intentar.
   const abrir = () => db ??= new Promise((ok, mal) => {
     const r = indexedDB.open(nombre, 1);
     r.onupgradeneeded = () => r.result.createObjectStore("kv");
     r.onsuccess = () => ok(r.result);
     r.onerror = () => mal(r.error);
-  });
+  }).catch(e => { db = undefined; throw e; });
   const op = (modo, f) => abrir().then(d => new Promise((ok, mal) => {
     const tx = d.transaction("kv", modo), req = f(tx.objectStore("kv"));
     tx.oncomplete = () => ok(req.result);
@@ -59,10 +60,17 @@ export function crearBiblias(backend = backendIndexedDB()) {
       for (const [n, libro] of Object.entries(biblia.libros)) await backend.put(`t:${biblia.sigla}:${gen}:${n}`, libro);
       const meta = { sigla: biblia.sigla, nombre: biblia.nombre, derechos: biblia.derechos, resumen: biblia.resumen, gen,
         orden: anterior?.orden ?? (ms.length ? Math.max(...ms.map(m => m.orden)) + 1 : 1) };
-      await backend.put("v:" + biblia.sigla, meta);
-      if (anterior) await borrarLibros(biblia.sigla, anterior.gen);
-      if (!ms.length) await backend.put("principal", biblia.sigla);
-      invalidar();
+      try {
+        await backend.put("v:" + biblia.sigla, meta);
+        // Desde aquí la versión nueva ya es la vigente. Si falla lo que sigue, la caché se invalida igual
+        // y el error trae guardada: true (la Biblia sí quedó guardada, pero sobró la versión vieja).
+        try {
+          if (!ms.length) await backend.put("principal", biblia.sigla);
+          if (anterior) await borrarLibros(biblia.sigla, anterior.gen);
+        } catch (e) {
+          throw Object.assign(new Error(`${biblia.sigla} se guardó, pero no se pudo borrar la versión anterior: ${e?.message ?? e}`), { guardada: true, causa: e });
+        }
+      } finally { invalidar(); }
       return meta;
     },
     async hacerPrincipal(sigla) { if (await backend.get("v:" + sigla)) { await backend.put("principal", sigla); invalidar(); } },

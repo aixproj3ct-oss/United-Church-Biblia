@@ -5,6 +5,7 @@
   <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#000000">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://ntfy.sh; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Proyección United Church</title>
   <link rel="icon" href="assets/icono-192.png">
   <link rel="stylesheet" href="assets/fuentes/fuentes.css">
@@ -22,8 +23,10 @@
     <div class="espera" id="espera">
       <img src="assets/icono-512.png" alt="">
       <div class="ref">United Church · International Ministries</div>
+      <i class="sin-conexion" id="sin-conexion" role="img" aria-label="Sin conexión" title="Sin conexión" hidden></i>
     </div>
     <p class="texto medida" id="medida" aria-hidden="true"></p>
+    <div class="caja mide" aria-hidden="true"><div class="ref" id="m-ref"></div><div class="pie" id="m-pie"></div></div>
   </div>
   <aside class="panel" id="panel" hidden></aside>
   <div class="aviso" id="aviso" role="status" hidden></div>

@@ -39,13 +39,26 @@ foreach ($sec in $valores.Keys) {
 [System.IO.File]::WriteAllLines($ini, $lineas, (New-Object System.Text.UTF8Encoding $true))
 
 Write-Host "3/3 Acceso directo en el escritorio..."
+# El acceso directo usa una copia propia en %LOCALAPPDATA%\ProyectarTablet (solo de este usuario de Windows),
+# no la carpeta de donde se instaló: así nadie puede cambiar el script moviendo o editando esa otra carpeta.
+# La carpeta Chrome\ (perfil de la proyección) vive ahí mismo y no se toca.
+$destino = Join-Path $env:LOCALAPPDATA "ProyectarTablet"
+New-Item -ItemType Directory -Force $destino | Out-Null
+if ((Resolve-Path $aqui).Path.TrimEnd('\') -ne (Resolve-Path $destino).Path.TrimEnd('\')) {
+  Copy-Item (Join-Path $aqui "*") $destino -Recurse -Force
+}
+$script = Join-Path $destino "proyectar.ps1"
+if (-not (Test-Path $script)) { throw "No se pudo copiar proyectar.ps1 a $destino." }
 $sh = New-Object -ComObject WScript.Shell
 $lnk = $sh.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "Proyectar tablet.lnk"))
 $lnk.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$lnk.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$(Join-Path $aqui 'proyectar.ps1')`""
+$lnk.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`""
+$lnk.WorkingDirectory = $destino
 $lnk.IconLocation = "$obsExe,0"
 $lnk.Description = "Abre la pantalla de proyección de la tablet y la cámara de OBS para EasyWorship"
 $lnk.Save()
 Write-Host ""
 Write-Host "Listo. Usa el acceso directo 'Proyectar tablet' del escritorio." -ForegroundColor Green
+Write-Host "El programa quedó copiado en: $destino"
+Write-Host "Si cambias algo de esta carpeta de instalación, vuelve a ejecutar instalar.ps1 para que la copia se actualice."
 Write-Host "En EasyWorship: Live Video -> 'OBS Virtual Camera'."

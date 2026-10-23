@@ -2,7 +2,7 @@
 import { parseCita, ordenBiblico } from "./src/citas.js";
 import { crearAlmacen } from "./src/datos.js";
 import { crearBiblias } from "./src/biblias.js";
-import { decodificar, importarBiblia, ErrorBiblia } from "./src/importar.js";
+import { decodificar, importarBiblia, ErrorBiblia, verificarTamano } from "./src/importar.js";
 import { refDeCodigo, etiquetaRef, codigoRef, abreviatura } from "./src/pasaje.js";
 import { LIBROS } from "./src/libros.js";
 import { nuevaLectura, seguirProyeccion } from "./src/lectura.js";
@@ -12,6 +12,17 @@ import { proximoDomingo, fechaLarga } from "./src/fechas.js";
 import { esc, aviso } from "./src/ui.js";
 import { proy, iniciarLector, conectarPantalla, hayPantalla, sinRespuesta, soltarPantalla, vistaLector, pintarLector,
   sincronizarProyeccion, proyectarActual, reintentar, cambiarParte, quitarDePantalla, alVolver } from "./src/lector.js";
+
+// Si algo falla sin que nadie lo atrape, el pastor ve un aviso corto (sin detalles) y el detalle queda en la consola.
+let ultimoFallo = 0;
+function falloGeneral(detalle) {
+  console.error("Error no controlado:", detalle);
+  if (Date.now() - ultimoFallo < 4000) return;
+  ultimoFallo = Date.now();
+  aviso("Algo falló; intenta de nuevo");
+}
+window.addEventListener("error", ev => { if (!String(ev.message).startsWith("ResizeObserver")) falloGeneral(ev.error ?? ev.message); });
+window.addEventListener("unhandledrejection", ev => falloGeneral(ev.reason));
 
 const almacen = crearAlmacen();
 const biblias = crearBiblias();
@@ -32,6 +43,60 @@ let editando = false, domingoSel = null;
 let lectura = null, libroSel = null, testamento = "at", pestana = "historial";
 // Búsqueda por texto: el índice se arma una vez (al primer uso) y se descarta si cambian las versiones.
 let indice = null, busqueda = null;
+
+const SIN_ESPACIO = "No se pudo guardar en la tablet: falta espacio";
+// Muestra msg solo si lo último quedó escrito en la tablet; si no, avisa que falta espacio (nunca dice "guardado").
+function avisoGuardado(msg, ms) {
+  if (almacen.persistido()) { if (msg) aviso(msg, ms); return true; }
+  aviso(SIN_ESPACIO, 7000);
+  return false;
+}
+
+// Confirmación con el diálogo propio (no el confirm() del navegador). Devuelve true si elige "si".
+function confirmar(texto, si, no) {
+  return new Promise(res => {
+    const dlg = $("#dlg-confirmar");
+    if (dlg.open) return res(false);
+    $("#conf-texto").textContent = texto; $("#conf-si").textContent = si; $("#conf-no").textContent = no;
+    dlg.returnValue = "no";
+    const fin = () => { dlg.removeEventListener("close", fin); res(dlg.returnValue === "si"); };
+    dlg.addEventListener("close", fin);
+    dlg.showModal();
+  });
+}
+
+// Borrador del editor de domingos: vive en sessionStorage mientras la pestaña siga abierta.
+const CLAVE_BORRADOR = "uc-borrador-domingo";
+let baseEd = null;   // lo que mostraba el editor al abrirlo (para saber si hay cambios sin guardar)
+const leerBorrador = () => { try { return JSON.parse(sessionStorage.getItem(CLAVE_BORRADOR)); } catch { return null; } };
+const borrarBorrador = () => { try { sessionStorage.removeItem(CLAVE_BORRADOR); } catch { /* sin sessionStorage */ } };
+const valoresEditor = () => $("#d-fecha") ? { fecha: $("#d-fecha").value, titulo: $("#d-titulo").value, citas: $("#d-citas").value } : null;
+function hayCambiosEditor() {
+  const v = valoresEditor();
+  return !!(v && baseEd && (v.fecha !== baseEd.fecha || v.titulo !== baseEd.titulo || v.citas !== baseEd.citas));
+}
+function guardarBorradorEditor() {
+  if (!hayCambiosEditor()) return borrarBorrador();
+  try { sessionStorage.setItem(CLAVE_BORRADOR, JSON.stringify({ sel: domingoSel, ...valoresEditor() })); } catch { /* sin sessionStorage */ }
+}
+// Antes de salir del editor (otra sección, "Volver al plan", otro domingo): si hay cambios, pide confirmar.
+async function puedeSalirEditor() {
+  if (vista !== "domingo" || !editando || !hayCambiosEditor()) return true;
+  if (!await confirmar("Tienes cambios sin guardar. ¿Salir sin guardar?", "Salir sin guardar", "Seguir editando")) return false;
+  borrarBorrador();
+  return true;
+}
+// Al abrir el editor: si quedó un borrador de este mismo domingo, ofrece recuperarlo.
+async function ofrecerBorrador() {
+  const b = leerBorrador(), v = valoresEditor();
+  if (!b || !v || b.sel !== domingoSel) return;
+  if (b.fecha === v.fecha && b.titulo === v.titulo && b.citas === v.citas) return borrarBorrador();
+  if (await confirmar("Tienes un borrador sin guardar de este domingo. ¿Quieres recuperarlo?", "Recuperar", "Descartar")) {
+    if (!$("#d-fecha")) return;
+    $("#d-fecha").value = b.fecha; $("#d-titulo").value = b.titulo; $("#d-citas").value = b.citas;
+    previstaDomingo(); aviso("Borrador recuperado");
+  } else borrarBorrador();
+}
 
 function hace(iso) {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
@@ -153,14 +218,26 @@ async function armarIndice() {
 }
 
 async function buscarTexto(consulta, sigla = null) {
-  busqueda = { consulta, sigla, resultados: null, versiones: busqueda?.versiones ?? [] };
+  const mia = busqueda = { consulta, sigla, resultados: null, versiones: busqueda?.versiones ?? [] };
   pintar();
-  busqueda.versiones = (await biblias.versiones()).map(m => m.sigla);
-  if (!indice) { $("#resultados").innerHTML = `<p class="meta">Preparando la búsqueda… (solo la primera vez)</p>`; indice = armarIndice(); }
-  const idx = await indice;
-  if (busqueda?.consulta !== consulta) return;
-  busqueda.resultados = buscar(idx, consulta, { sigla, max: 20 });
-  if (vista === "biblia") $("#resultados").innerHTML = htmlResultados();
+  const mostrar = () => { if (vista === "biblia" && busqueda === mia && $("#resultados")) $("#resultados").innerHTML = htmlResultados(); };
+  try {
+    mia.versiones = (await biblias.versiones()).map(m => m.sigla);
+    if (!indice) {
+      if ($("#resultados")) $("#resultados").innerHTML = `<p class="meta">Preparando la búsqueda… (solo la primera vez)</p>`;
+      // Si armar el índice falla, se descarta para que la próxima búsqueda lo intente de nuevo.
+      const p = armarIndice().catch(e => { if (indice === p) indice = null; throw e; });
+      indice = p;
+    }
+    const idx = await indice;
+    if (busqueda !== mia) return;
+    mia.resultados = buscar(idx, consulta, { sigla, max: 20 });
+    mostrar();
+  } catch (e) {
+    console.error("Búsqueda:", e);
+    if (busqueda === mia) { mia.error = true; mostrar(); }
+    aviso("No se pudo preparar la búsqueda, intenta de nuevo");
+  }
 }
 
 // Resalta las palabras completas de la consulta sobre el texto ya escapado (nunca dentro de una palabra).
@@ -176,6 +253,7 @@ function htmlResultados() {
     <button class="${sigla ? "" : "on"}" data-filtro="">Todas las versiones</button>
     ${versiones.length > 1 ? versiones.map(s => `<button class="${sigla === s ? "on" : ""}" data-filtro="${esc(s)}">Solo ${esc(s)}</button>`).join("") : ""}
     <button data-limpiar>✕ Limpiar</button></div>`;
+  if (busqueda.error) return filtro + `<p class="vacio">No se pudo preparar la búsqueda, intenta de nuevo</p>`;
   if (!resultados) return filtro + `<p class="meta">Buscando…</p>`;
   if (!versiones.length) return filtro + `<p class="vacio">Primero carga una Biblia en Configuración.</p>`;
   if (!resultados.length) return filtro + `<p class="vacio">No encontré versículos con esas palabras. Prueba con menos palabras o con otras más particulares.</p>`;
@@ -267,16 +345,26 @@ async function pintarVersiones() {
 
 const nombreCopia = ext => `united-church-respaldo-${hoyISO()}.${ext}`;
 function descargarCopia(texto, msg) {
-  const blob = new Blob([texto], { type: "application/json" });
-  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: nombreCopia("json") });
-  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  almacen.marcarRespaldo(); pintar(); aviso(msg, 7000);
+  try {
+    const blob = new Blob([texto], { type: "application/json" });
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: nombreCopia("json") });
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  } catch (e) {
+    console.error("Descarga de la copia:", e);
+    return aviso("No se pudo preparar la descarga de la copia. Intenta con «Compartir copia».", 8000);
+  }
+  almacen.marcarRespaldo(); pintar(); aviso(msg, 8000);
 }
 
 function desconectar() {
   almacen.guardarConfig({ pantalla: null }); soltarPantalla(); proy.respuesta = null;
   conectarPantalla(); pintar();
+  return almacen.persistido();
 }
+
+// Pinta el lector; si el pasaje no se puede abrir, avisa en vez de dejar la pantalla a medias.
+const repintarLector = () => pintarLector(lectura).then(sincronizarProyeccion)
+  .catch(e => { console.error("Lector:", e); aviso("No se pudo abrir el pasaje"); });
 
 // ---------- Navegación ----------
 function pintar() {
@@ -284,10 +372,10 @@ function pintar() {
   document.body.classList.toggle("en-lector", vista === "lector");
   $("#vista").innerHTML = { domingo: vistaDomingo, biblia: vistaBiblia, guardados: vistaGuardados, config: vistaConfig, lector: () => vistaLector(lectura) }[vista]();
   document.querySelectorAll(".nav [data-ir]").forEach(b => b.classList.toggle("activa", b.dataset.ir === vista));
-  if (vista === "domingo" && editando) previstaDomingo();
+  if (vista === "domingo" && editando) { previstaDomingo(); baseEd = valoresEditor(); }
   if (vista === "biblia") pista();
   if (vista === "config") pintarVersiones();
-  if (vista === "lector") pintarLector(lectura).then(sincronizarProyeccion);
+  if (vista === "lector") repintarLector();
 }
 
 function ir(v, nueva = false) {
@@ -306,16 +394,20 @@ document.addEventListener("click", async ev => {
   const t = ev.target.closest("button,[data-ir]");
   if (!t) return;
   const d = t.dataset;
-  if (d.ir) { if (d.ir === "domingo") editando = false; return ir(d.ir); }
+  if (d.ir) {
+    if (!await puedeSalirEditor()) return;
+    if (d.ir === "domingo") editando = false;
+    return ir(d.ir);
+  }
   if (t.hasAttribute("data-volver")) return history.back();
   if (t.hasAttribute("data-buscar")) { ir("biblia"); return $("#q")?.focus(); }
   if (t.hasAttribute("data-proyectar")) return proyectarActual();
   if (t.hasAttribute("data-reintentar")) return reintentar();
   if (d.parte) return cambiarParte(Number(d.parte));
   if (t.hasAttribute("data-quitar-pantalla")) return quitarDePantalla();
-  if (t.id === "c-desconectar" || t.id === "c-desconectar2") { desconectar(); return aviso("Pantalla desconectada"); }
-  if (d.tema) { almacen.guardarConfig({ tema: d.tema }); return pintar(); }
-  if (d.letra) { almacen.guardarConfig({ letra: d.letra }); return pintar(); }
+  if (t.id === "c-desconectar" || t.id === "c-desconectar2") { desconectar(); return avisoGuardado("Pantalla desconectada"); }
+  if (d.tema) { almacen.guardarConfig({ tema: d.tema }); pintar(); return avisoGuardado(); }
+  if (d.letra) { almacen.guardarConfig({ letra: d.letra }); pintar(); return avisoGuardado(); }
   if (d.capitulo) { const c = dec(d.capitulo); return abrirCapitulo(c.codigo, c.cap); }
   if (d.versiculo) { const r = dec(d.versiculo); return abrir({ codigo: codigoRef(r), etiqueta: etiquetaRef(r) }, { navegando: true }); }
   if (d.libro !== undefined) { libroSel = d.libro || null; pintar(); return ($("#vista").scrollTop = 0); }
@@ -325,13 +417,14 @@ document.addEventListener("click", async ev => {
   if (t.hasAttribute("data-limpiar")) { busqueda = null; return pintar(); }
   if (t.hasAttribute("data-completo")) {
     lectura.completo = !lectura.completo; history.replaceState({ vista, lectura }, "", "#lector");
-    return pintarLector(lectura).then(sincronizarProyeccion);
+    return repintarLector();
   }
   if (d.version) {
     const cuerpo = $("#l-cuerpo"), y = cuerpo.scrollTop;
     lectura.sigla = d.version; history.replaceState({ vista, lectura }, "", "#lector");
-    await pintarLector(lectura); cuerpo.scrollTop = y;
-    return sincronizarProyeccion();
+    try { await pintarLector(lectura); cuerpo.scrollTop = y; await sincronizarProyeccion(); }
+    catch (e) { console.error("Lector:", e); aviso("No se pudo abrir el pasaje"); }
+    return;
   }
   if (d.principal) { await biblias.hacerPrincipal(d.principal); return pintarVersiones(); }
   if (d.quitarVersion) {
@@ -352,30 +445,49 @@ document.addEventListener("click", async ev => {
   }
   if (d.cita) return abrir(dec(d.cita), { domingo: d.domingoI ? dec(d.domingoI) : null, sigla: d.sigla || null });
   if (d.fav) return pedirSerie(dec(d.fav));
-  if (d.quitar) { almacen.quitarFavorito(d.quitar); return pintar(); }
+  if (d.quitar) { almacen.quitarFavorito(d.quitar); pintar(); return avisoGuardado(); }
   if (d.sugerir !== undefined) { $("#q").value = d.sugerir; pista(); return $("#q").focus(); }
-  if (d.editar !== undefined) { editando = true; domingoSel = d.editar || null; pintar(); return ($("#vista").scrollTop = 0); }
-  if (t.hasAttribute("data-plan")) { editando = false; return pintar(); }
-  if (d.domingo !== undefined) { domingoSel = d.domingo || null; return pintar(); }
+  if (d.editar !== undefined) {
+    editando = true; domingoSel = d.editar || null; pintar(); $("#vista").scrollTop = 0;
+    return ofrecerBorrador();
+  }
+  if (t.hasAttribute("data-plan")) {
+    if (!await puedeSalirEditor()) return;
+    editando = false; return pintar();
+  }
+  if (d.domingo !== undefined) {
+    if (!await puedeSalirEditor()) return;
+    domingoSel = d.domingo || null; pintar();
+    return ofrecerBorrador();
+  }
   if (d.serie) { document.querySelectorAll("#fav-series .chip").forEach(c => c.classList.toggle("sel", c === t)); $("#fav-nueva").value = d.serie; }
-  if (t.id === "d-borrar" && confirm("¿Borrar este domingo?")) { almacen.borrarDomingo(domingoSel); domingoSel = null; pintar(); aviso("Domingo borrado"); }
-  if (t.id === "c-exportar") descargarCopia(almacen.exportar(), `Copia guardada en Descargas: ${nombreCopia("json")}`);
+  if (t.id === "d-borrar" && confirm("¿Borrar este domingo?")) {
+    almacen.borrarDomingo(domingoSel); domingoSel = null; borrarBorrador(); pintar();
+    avisoGuardado("Domingo borrado");
+  }
+  if (t.id === "c-exportar") descargarCopia(almacen.exportar(), `Se inició la descarga de la copia (${nombreCopia("json")}). Búscala en la carpeta Descargas.`);
   if (t.id === "c-compartir") {
     const texto = almacen.exportar();
     const file = new File([texto], nombreCopia("txt"), { type: "text/plain" });
+    let motivo = "Este dispositivo no permite compartir archivos";
     if (navigator.canShare?.({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: "Copia de United Church", text: "Copia de respaldo de United Church (guárdala en Drive, WhatsApp o correo)." });
         almacen.marcarRespaldo(); pintar(); return aviso("Copia compartida");
-      } catch (e) { if (e?.name === "AbortError") return; }
+      } catch (e) {
+        if (e?.name === "AbortError") return;   // el pastor cerró el menú de compartir
+        console.error("Compartir:", e);
+        motivo = `No se pudo compartir la copia (${e?.message || e?.name || "motivo desconocido"})`;
+      }
     }
-    descargarCopia(texto, "Este dispositivo no permite compartir archivos; la copia se guardó en Descargas.");
+    descargarCopia(texto, `${motivo}. Se inició la descarga de la copia.`);
   }
 });
 
 document.addEventListener("input", ev => {
   if (ev.target.id === "q") pista();
   if (ev.target.id === "d-citas") previstaDomingo();
+  if (["d-fecha", "d-titulo", "d-citas"].includes(ev.target.id)) guardarBorradorEditor();
 });
 
 document.addEventListener("submit", ev => {
@@ -391,20 +503,25 @@ document.addEventListener("submit", ev => {
   if (f.id === "f-domingo") {
     const ls = lineasDomingo($("#d-citas").value);
     if (!ls.length || ls.some(l => !l.r.ok)) return;
-    domingoSel = almacen.guardarDomingo({ id: domingoSel, fecha: $("#d-fecha").value, titulo: $("#d-titulo").value.trim(),
+    const id = almacen.guardarDomingo({ id: domingoSel, fecha: $("#d-fecha").value, titulo: $("#d-titulo").value.trim(),
       citas: ls.map(l => ({ ...citaDe(l.r), ...(l.titulo ? { titulo: l.titulo } : {}) })) });
-    editando = false; pintar(); aviso("Domingo guardado");
+    if (!id) return aviso("Ese domingo no se puede guardar: revisa la fecha y las citas.", 6000);
+    domingoSel = id;
+    // Sin espacio: el editor queda abierto con lo escrito (y el borrador) para reintentar; no se dice "guardado".
+    if (!almacen.persistido()) return aviso(`${SIN_ESPACIO}. Lo que escribiste sigue aquí.`, 8000);
+    borrarBorrador(); editando = false; pintar(); aviso("Domingo guardado");
   }
   if (f.id === "f-pantalla") {
     const codigo = normalizarCodigo($("#c-pantalla").value);
     if (!codigo) return aviso("Ese código no es válido. Cópialo de la pantalla (tecla F2), por ejemplo UC-7K4P-9QX2.", 6000);
-    almacen.guardarConfig({ pantalla: codigo }); conectarPantalla(); pintar(); return aviso("Pantalla conectada");
+    const ok = almacen.guardarConfig({ pantalla: codigo }); conectarPantalla(); pintar();
+    return aviso(ok ? "Pantalla conectada" : "Pantalla conectada, pero no se pudo guardar en la tablet: falta espacio", ok ? 3500 : 7000);
   }
   if (f.id === "f-fav") {
     const guardar = ev.submitter?.value !== "cancelar" && favPendiente;
-    if (guardar) almacen.agregarFavorito($("#fav-nueva").value, favPendiente);
+    const ok = guardar ? almacen.agregarFavorito($("#fav-nueva").value, favPendiente) : false;
     $("#dlg-fav").close();
-    if (guardar) { if (vista !== "lector") pintar(); aviso("Guardado en favoritos"); }
+    if (guardar) { if (vista !== "lector") pintar(); aviso(ok ? "Guardado en favoritos" : almacen.persistido() ? "No se pudo guardar ese favorito" : SIN_ESPACIO, ok ? 3500 : 7000); }
   }
 });
 
@@ -412,39 +529,67 @@ document.addEventListener("change", async ev => {
   if (ev.target.id === "c-biblia" && ev.target.files[0]) {
     const inp = ev.target, archivo = inp.files[0];
     inp.value = "";
+    let fase = "leer", sigla = "";
     try {
+      verificarTamano(archivo.size);
       aviso("Leyendo la Biblia…", 60000);
       const b = importarBiblia(decodificar(await archivo.arrayBuffer()));
       if (!b.sigla) b.sigla = (prompt("¿Qué sigla le ponemos a esta versión? (por ejemplo TLA)") || "").trim().slice(0, 20);
       if (!b.sigla) return aviso("Carga cancelada: falta la sigla");
+      sigla = b.sigla; fase = "guardar";
       const ya = (await biblias.versiones()).some(m => m.sigla === b.sigla);
       if (ya && !confirm(`Ya hay una versión ${b.sigla}. ¿Reemplazarla por este archivo?`)) return aviso("Carga cancelada");
       aviso("Guardando en la tablet…", 60000);
-      await biblias.guardar(b);
-      indice = null;
-      aviso(`${b.sigla}: ${b.resumen.libros} libros, ${b.resumen.versiculos.toLocaleString("es")} versículos${b.resumen.agrupados ? ` (${b.resumen.agrupados.toLocaleString("es")} agrupados)` : ""}`, 8000);
+      try { await biblias.guardar(b); } finally { indice = null; }
+      const resumen = `${b.sigla}: ${b.resumen.libros} libros, ${b.resumen.versiculos.toLocaleString("es")} versículos${b.resumen.agrupados ? ` (${b.resumen.agrupados.toLocaleString("es")} agrupados)` : ""}`;
+      const av = b.advertencias ?? [];
+      aviso(av.length ? `${resumen}. Atención: ${av.join(". ")}` : resumen, av.length ? 15000 : 8000);
     } catch (e) {
-      aviso(e instanceof ErrorBiblia ? e.message : "No se pudo guardar la Biblia (¿falta espacio en la tablet?). La versión anterior sigue igual.", 8000);
+      console.error("Cargar Biblia:", e);
+      aviso(e instanceof ErrorBiblia ? e.message
+        : fase === "leer" ? "No se pudo leer el archivo. Vuelve a elegirlo."
+        : e?.guardada ? `${sigla} se guardó, pero no se pudo borrar la versión anterior: sigue ocupando espacio en la tablet.`
+        : "No se pudo guardar la Biblia (¿falta espacio en la tablet?). La versión anterior sigue igual.", 8000);
     }
     return pintarVersiones();
   }
   if (ev.target.id !== "c-importar" || !ev.target.files[0]) return;
   const inp = ev.target;
-  try {
-    const texto = await inp.files[0].text();
-    if (confirm("Esto reemplaza todos los datos actuales por los de la copia. ¿Continuar?")) {
-      const n = almacen.importar(texto);
-      soltarPantalla(); conectarPantalla();
-      pintar(); aviso(n ? `Copia restaurada (${n} elementos dañados se omitieron)` : "Copia restaurada");
+  // 1) Leer el archivo. 2) Restaurar los datos. 3) Pintar. Cada paso avisa qué falló.
+  let texto;
+  try { texto = await inp.files[0].text(); }
+  catch (e) { console.error("Leer copia:", e); inp.value = ""; return aviso("No se pudo leer el archivo. Vuelve a elegirlo."); }
+  if (confirm("Esto reemplaza todos los datos actuales por los de la copia. ¿Continuar?")) {
+    let n;
+    try { n = almacen.importar(texto); }
+    catch (e) {
+      console.error("Restaurar copia:", e);
+      inp.value = "";
+      return aviso(e?.message === "Archivo no válido" ? "Ese archivo no es una copia válida de United Church" : "No se pudo restaurar la copia; tus datos siguen como estaban.", 7000);
     }
+    borrarBorrador(); editando = false;
+    try { pintar(); }
+    catch (e) { console.error("Pintar tras restaurar:", e); inp.value = ""; return aviso("La copia se restauró, pero la pantalla no se pudo actualizar. Cierra y abre la app.", 8000); }
+    const resto = n ? `${n} elementos dañados se omitieron. ` : "";
+    aviso(almacen.persistido()
+      ? `Copia restaurada. ${resto}Tu conexión con la pantalla no cambió.`
+      : `Copia restaurada, pero no se pudo guardar en la tablet: falta espacio. ${resto}Tu conexión con la pantalla no cambió.`, 9000);
   }
-  catch { aviso("Ese archivo no es una copia válida de United Church"); }
   inp.value = "";
 });
 
 $("#dlg-fav").addEventListener("close", () => { favPendiente = null; });
+$("#conf-si").addEventListener("click", () => $("#dlg-confirmar").close("si"));
+$("#conf-no").addEventListener("click", () => $("#dlg-confirmar").close("no"));
 $("#b-actualizar").addEventListener("click", () => location.reload());
-navigator.storage?.persist?.().catch?.(() => {});
+// Pide al navegador que no borre los datos de la tablet cuando falte espacio (sin esperar la respuesta).
+try { navigator.storage?.persist?.()?.catch?.(() => {}); } catch { /* no disponible */ }
+{
+  // Si al abrir se apartaron datos dañados, se avisa (queda una copia cruda en la tablet).
+  const { descartados, ilegible, copia } = almacen.infoCarga();
+  if (ilegible) aviso(`Los datos guardados no se pudieron leer y se apartaron${copia ? " (hay copia)" : ""}. Empiezas con la app vacía.`, 10000);
+  else if (descartados) aviso(`${descartados} ${descartados === 1 ? "elemento dañado se apartó" : "elementos dañados se apartaron"}${copia ? " (hay copia)" : ""}`, 10000);
+}
 history.replaceState({ vista }, "", "#" + vista);
 if ("serviceWorker" in navigator) {
   // Solo avisa si ya había una versión controlando la página (la primera instalación no es una actualización).
@@ -453,4 +598,8 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 conectarPantalla();
-pintar();
+// Si la app se recargó con un pasaje en la pantalla de la iglesia, se vuelve al lector en ese pasaje:
+// así el pastor tiene a mano "Quitar" y "Reintentar" (la barra dice "Sin confirmar" hasta que la PC responda).
+const refProyectada = proy.activo ? refDeCodigo(proy.codigo) : null;
+if (refProyectada) abrir({ codigo: proy.codigo, etiqueta: etiquetaRef(refProyectada) }, { completo: !!proy.completo, sigla: proy.sigla });
+else pintar();

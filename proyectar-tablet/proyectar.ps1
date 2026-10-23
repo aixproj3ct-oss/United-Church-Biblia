@@ -2,6 +2,8 @@
 # Mide dónde queda el contenido de la página (sin la barra de título de Chrome), deja ese contenido en 16:9
 # y le indica a OBS el recorte exacto, sea cual sea la escala de pantalla de esta PC.
 param([string]$url = "https://aixproj3ct-oss.github.io/United-Church-Biblia/proyeccion.html")
+# Cualquier error detiene el script (la ventana va oculta: un fallo callado dejaría al operador sin saber qué pasó).
+$ErrorActionPreference = "Stop"
 $titulo = "Proyección United Church"
 $obsDir = "C:\Program Files\obs-studio\bin\64bit"
 $escena = Join-Path $env:APPDATA "obs-studio\basic\scenes\Proyectar_tablet.json"
@@ -21,6 +23,8 @@ public class Ventana {
 # Medir en píxeles reales en cualquier monitor (si no, Windows escala las coordenadas y el recorte sale mal).
 [Ventana]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
 function Aviso($t) { [System.Windows.MessageBox]::Show($t, "Proyectar tablet") | Out-Null }
+# Red de seguridad: un error no previsto se muestra con Aviso y termina el script.
+trap { Aviso "Algo falló y no se pudo abrir la proyección.`n`n$($_.Exception.Message)"; exit 1 }
 # Chrome propio para la proyección: así sigue dibujando aunque EasyWorship tape la ventana
 # (el Chrome normal deja de pintar las ventanas tapadas y OBS recibe una imagen congelada).
 $perfil = Join-Path $env:LOCALAPPDATA "ProyectarTablet\Chrome"
@@ -70,13 +74,22 @@ for ($intento = 0; $intento -lt 3; $intento++) {
   $recorte = @{ top = [int]($c.Top - $m.T); left = [int]($c.Left - $m.L); right = [int]($m.Rt - $c.Right); bottom = [int]($m.B - $c.Bottom) }
   break
 }
-if (-not $recorte) { Aviso "No pude medir la ventana; avísame para revisarlo." }
+if (-not $recorte) {
+  # Sin medida no se toca OBS: seguir con el recorte viejo mostraría la imagen cortada o con la barra de Chrome.
+  Aviso "No pude medir la ventana de proyección, así que no abrí OBS.`n`nCierra la ventana 'Proyección United Church' y vuelve a abrir 'Proyectar tablet'."
+  exit 1
+}
 
 # Escribe el recorte en la escena de OBS (solo si cambió; OBS debe estar cerrado para releerla).
 $obs = Get-Process obs64 -ErrorAction SilentlyContinue
-if ($recorte -and (Test-Path $escena)) {
+if (-not (Test-Path $escena)) {
+  Aviso "No encuentro la escena de OBS ($escena).`n`nVuelve a ejecutar instalar.ps1."
+  exit 1
+}
+try {
   $json = Get-Content $escena -Raw -Encoding UTF8 | ConvertFrom-Json
   $item = $json.sources | Where-Object { $_.id -eq "scene" } | ForEach-Object { $_.settings.items } | Select-Object -First 1
+  if (-not $item) { throw "la escena no tiene la captura de la ventana" }
   if ($item.crop_top -ne $recorte.top -or $item.crop_left -ne $recorte.left -or $item.crop_right -ne $recorte.right -or $item.crop_bottom -ne $recorte.bottom) {
     if ($obs) {
       # Cierre ordenado (sin forzar): si se fuerza, OBS arranca después en modo seguro y sin cámara.
@@ -88,9 +101,23 @@ if ($recorte -and (Test-Path $escena)) {
     $item.crop_top = $recorte.top; $item.crop_left = $recorte.left; $item.crop_right = $recorte.right; $item.crop_bottom = $recorte.bottom
     # Solo ASCII: los acentos van como \uXXXX para que OBS lea bien el título de la ventana.
     $texto = [regex]::Replace(($json | ConvertTo-Json -Depth 20), '[^\x00-\x7F]', { param($c) '\u{0:x4}' -f [int][char]$c.Value })
-    [System.IO.File]::WriteAllText($escena, $texto, (New-Object System.Text.UTF8Encoding $false))
+    # Se escribe en un archivo aparte y se reemplaza al final, con una copia de la escena anterior (.bak).
+    $nuevo = "$escena.nuevo"
+    [System.IO.File]::WriteAllText($nuevo, $texto, (New-Object System.Text.UTF8Encoding $false))
+    Copy-Item $escena "$escena.bak" -Force
+    Move-Item $nuevo $escena -Force
   }
+} catch {
+  Aviso "No pude actualizar la escena de OBS: $($_.Exception.Message)`n`nNo se abrió OBS. Si sigue pasando, vuelve a ejecutar instalar.ps1."
+  exit 1
 }
 if (-not $obs) {
-  Start-Process (Join-Path $obsDir "obs64.exe") -WorkingDirectory $obsDir -ArgumentList "--startvirtualcam", "--minimize-to-tray", "--disable-shutdown-check", "--collection", "`"Proyectar tablet`"", "--profile", "`"Proyectar tablet`"", "--scene", "Tablet"
+  try {
+    $obsExe = Join-Path $obsDir "obs64.exe"
+    if (-not (Test-Path $obsExe)) { throw "no existe $obsExe" }
+    Start-Process $obsExe -WorkingDirectory $obsDir -ArgumentList "--startvirtualcam", "--minimize-to-tray", "--disable-shutdown-check", "--collection", "`"Proyectar tablet`"", "--profile", "`"Proyectar tablet`"", "--scene", "Tablet"
+  } catch {
+    Aviso "No pude abrir OBS Studio: $($_.Exception.Message)"
+    exit 1
+  }
 }

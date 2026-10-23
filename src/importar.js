@@ -1,19 +1,35 @@
 // Convierte una Biblia en XML (formato Zefania o formato "bible") a una estructura común.
 // No usa DOMParser para correr igual en el navegador y en Node. El texto se queda en la tablet.
+import { LIBROS } from "./libros.js";
 export class ErrorBiblia extends Error {}
 
 const MIN_VERSOS_CON_TEXTO = 1000;
+// Una Biblia en XML pesa unos 5-10 MB; más de esto casi seguro no es una Biblia.
+export const MAX_BYTES = 40 * 1024 * 1024;
+export function verificarTamano(bytes) {
+  if (bytes > MAX_BYTES) {
+    const mb = n => Math.round(n / 1048576);
+    throw new ErrorBiblia(`Este archivo es demasiado grande (${mb(bytes)} MB; el máximo es ${mb(MAX_BYTES)} MB). ¿Seguro que es una Biblia en XML?`);
+  }
+}
 const ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+// Una entidad numérica fuera de rango (&#99999999;) o inválida deja el carácter de reemplazo en vez de fallar.
+const caracter = n => {
+  try { return n >= 1 && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : "�"; } catch { return "�"; }
+};
 const entidades = s => s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (_, e) =>
-  e[0] === "#" ? String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : ENT[e.toLowerCase()]);
+  e[0] === "#" ? caracter(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : ENT[e.toLowerCase()]);
 const atributo = (attrs, nombre) => {
   const m = attrs.match(new RegExp(`\\b${nombre}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`));
   return m ? entidades(m[1] ?? m[2]) : null;
 };
-const limpiar = s => entidades(String(s).replace(/<(NOTE|note)\b[\s\S]*?<\/\1>/g, "").replace(/<[^>]+>/g, "")).replace(/\s+/g, " ").trim();
+// Las etiquetas de salto o bloque (<BR/>, <DIV>, <P>...) separan palabras; las de estilo se quitan sin dejar hueco.
+const limpiar = s => entidades(String(s).replace(/<(NOTE|note)\b[\s\S]*?<\/\1>/g, "")
+  .replace(/<\/?(?:br|div|p|li|tr|td|th|h[1-6])\b[^>]*>/gi, " ").replace(/<[^>]+>/g, "")).replace(/\s+/g, " ").trim();
 const etiqueta = (t, nombre) => limpiar(t.match(new RegExp(`<${nombre}>([\\s\\S]*?)</${nombre}>`))?.[1] ?? "");
 
 export function decodificar(bytes) {
+  verificarTamano(bytes.byteLength);
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   try { return new TextDecoder("utf-8", { fatal: true }).decode(u8); }
   catch { return new TextDecoder("windows-1252").decode(u8); }
@@ -31,8 +47,26 @@ function datosBible(attrs) {
   return { sigla, nombre: paren && !/^m[aá]s informaci/i.test(paren) ? paren : sigla, derechos: atributo(attrs, "status") ?? "" };
 }
 
+// Avisos (no errores) sobre una Biblia que se cargó pero viene incompleta o rara.
+function advertencias(libros) {
+  const av = [];
+  const n = Object.keys(libros).length;
+  if (n < 66) av.push(`Esta Biblia trae ${n} de 66 libros`);
+  const raros = [];
+  for (const [num, caps] of Object.entries(libros)) {
+    const [, nombre, esperado] = LIBROS[num - 1];
+    const numeros = Object.keys(caps).map(Number), mayor = Math.max(...numeros);
+    if (mayor > esperado) raros.push(`${nombre} trae capítulos que no existen (hasta el ${mayor}; debería llegar al ${esperado})`);
+    else if (numeros.length < esperado) raros.push(`${nombre} trae ${numeros.length} de ${esperado} capítulos`);
+  }
+  av.push(...raros.slice(0, 3));
+  if (raros.length > 3) av.push(`y ${raros.length - 3} libros más con capítulos distintos a lo esperado`);
+  return av;
+}
+
 export function importarBiblia(xml) {
-  const t = String(xml ?? "").replace(/^﻿/, "");
+  if (typeof xml === "string") verificarTamano(xml.length);
+  const t =String(xml ?? "").replace(/^﻿/, "");
   const zefania = /<XMLBIBLE\b/.test(t);
   const raiz = t.match(zefania ? /<XMLBIBLE\b([^>]*)>/ : /<bible\b([^>]*)>/);
   if (!raiz) throw new ErrorBiblia("Este archivo no parece una Biblia en XML (Zefania o formato «bible»).");
@@ -61,6 +95,11 @@ export function importarBiblia(xml) {
     }
   }
   if (versiculos - agrupados < MIN_VERSOS_CON_TEXTO) throw new ErrorBiblia("Este archivo no parece una Biblia completa.");
+  // Se descartan libros y capítulos que quedaron vacíos para que el resumen cuente solo lo que hay.
+  for (const [n, caps] of Object.entries(libros)) {
+    for (const [c, vs] of Object.entries(caps)) if (!Object.keys(vs).length) delete caps[c];
+    if (!Object.keys(caps).length) delete libros[n];
+  }
   return { sigla: datos.sigla.slice(0, 20), nombre: datos.nombre, derechos: datos.derechos, libros,
-    resumen: { libros: Object.keys(libros).length, versiculos, agrupados } };
+    resumen: { libros: Object.keys(libros).length, versiculos, agrupados }, advertencias: advertencias(libros) };
 }

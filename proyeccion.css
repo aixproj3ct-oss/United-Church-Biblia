@@ -1,6 +1,7 @@
 /* Pantalla de proyección: lámina fija de 1920×1080 (estilo «C» aprobado), escalada a la ventana. */
 :root{--oro:#e8b44a;--ambar:#ffb24d;--blanco:#fbf7ef;--s:1}
-html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Montserrat,sans-serif}
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Montserrat,sans-serif;cursor:none}
+body.con-panel{cursor:default} /* con el panel F2 abierto el cursor se ve */
 .escenario{position:absolute;left:50%;top:50%;width:1920px;height:1080px;overflow:hidden;transform:translate(-50%,-50%) scale(var(--s));color:var(--blanco)}
 .foto{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .velo{position:absolute;inset:0;background:linear-gradient(90deg,rgba(14,30,48,.85),rgba(14,30,48,.75) 62%,transparent 85%)}
@@ -14,9 +15,11 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Monts
 .texto.aviso-texto{font-size:48px;opacity:.9}
 .pie{margin-top:30px;font-size:22px;letter-spacing:.38em;text-transform:uppercase;opacity:.75}
 .medida{position:absolute;left:-5000px;top:0;width:1000px;visibility:hidden}
+.mide{left:-5000px;visibility:hidden;pointer-events:none} /* mide la referencia y el pie sin tocar la lámina visible */
 .espera{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px}
 .espera img{width:260px;height:260px;border-radius:50%;box-shadow:0 10px 50px rgba(0,0,0,.6)}
 .espera .ref{font-size:60px;margin:0}
+.sin-conexion{position:absolute;right:28px;bottom:28px;width:14px;height:14px;border-radius:50%;background:var(--ambar);opacity:.55}
 /* Panel del operador (F2). OBS captura toda la ventana: el panel se ve en la cámara mientras está abierto. */
 .panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,90vw);overflow:auto;background:#10141c;color:#e8edf5;padding:20px 22px;box-shadow:-10px 0 40px rgba(0,0,0,.6);font-size:15px;z-index:5}
 .panel h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#9aa6b8;margin:22px 0 8px}

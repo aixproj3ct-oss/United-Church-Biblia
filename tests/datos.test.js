@@ -208,14 +208,15 @@ test("tema: claro por defecto, acepta oscuro, se sanea lo inválido y se conserv
   assert.equal(a.config().tema, "oscuro");
 });
 
-test("pantalla: normaliza el código, rechaza lo inválido y viaja en la copia", () => {
+test("pantalla: normaliza el código, rechaza lo inválido y NO viaja en la copia", () => {
   const a = crearAlmacen(memoria());
   a.guardarConfig({ pantalla: "uc-7k4p-9qx2" });
   assert.equal(a.config().pantalla, "UC-7K4P-9QX2");
   a.guardarConfig({ pantalla: "xx" });
   assert.equal(a.config().pantalla, null);
+  // el código que venga en el archivo se ignora: la tablet conserva el suyo
   a.importar(JSON.stringify({ version: 1, domingos: [], favoritos: [], historial: [], config: { pantalla: "UC-7K4P-9QX2" } }));
-  assert.equal(a.config().pantalla, "UC-7K4P-9QX2");
+  assert.equal(a.config().pantalla, null);
 });
 
 test("exportar no marca el respaldo; marcarRespaldo sí", () => {
