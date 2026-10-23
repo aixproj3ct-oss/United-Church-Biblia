@@ -213,6 +213,7 @@ const titulo = l => l.completo && l.ref.v1 ? etiquetaRef({ ...l.ref, v1: null, v
 
 export function vistaLector(lectura) {
   return `<section class="lector"><header class="l-cab"><button class="ib" data-volver aria-label="Volver">${ic("izq")}</button>
+    <button class="btn-ini" data-inicio>${ic("casa")}Inicio</button>
     <h1 class="l-ref">${esc(titulo(lectura))}</h1>
     <button class="ib" data-buscar aria-label="Buscar">${ic("bus")}</button>
     <div class="l-herr"><span class="letra-g" role="group" aria-label="Tamaño de letra"><button data-letra-paso="-1" aria-label="Letra más chica">A−</button><button data-letra-paso="1" aria-label="Letra más grande">A+</button></span>

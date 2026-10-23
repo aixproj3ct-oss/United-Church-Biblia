@@ -358,7 +358,9 @@ function vistaConfig() {
   const c = almacen.config();
   const seg = (attr, ops, val) => `<span class="seg">${ops.map(([v, t, st]) => `<button class="${v === val ? "on" : ""}" data-${attr}="${v}" ${st ? `style="${st}"` : ""}>${t}</button>`).join("")}</span>`;
   const estado = !c.pantalla ? "" : sinRespuesta() ? `<span class="pill mal">● Sin respuesta</span>` : proy.respuesta ? `<span class="pill ok">● Responde</span>` : "";
-  return `<h1>Configuración</h1><div class="cfg">
+  // Dos columnas que se llenan por separado: Apariencia (la más alta) a la izquierda y las otras tres a la derecha,
+  // así ninguna tarjeta deja un hueco debajo de otra.
+  return `<h1>Configuración</h1><div class="cfg"><div class="cfg-col">
     <section class="card"><h2>Apariencia</h2>
       <form id="f-pastor" class="lin saludo-f"><label for="c-pastor">Saludo<small>La app dice «Buenos días, …» con lo que escribas aquí</small></label>
         <span class="saludo-campo"><input id="c-pastor" class="campo" maxlength="40" value="${esc(c.pastor)}" placeholder="Por ejemplo: pastor Juan Pérez" autocomplete="off" autocapitalize="sentences" spellcheck="false">
@@ -366,8 +368,8 @@ function vistaConfig() {
       <div class="lin">Tema ${seg("tema", [["claro", "Claro"], ["oscuro", "Oscuro"]], c.tema)}</div>
       <div class="lin">Tamaño de letra ${seg("letra", [["normal", "A", "font-size:14px"], ["grande", "A", "font-size:18px"], ["muy-grande", "A", "font-size:22px"]], c.letra)}</div>
       <div class="lin">Orientación de la pantalla ${seg("orientacion", [["horizontal", "Horizontal"], ["vertical", "Vertical"]], c.orientacion)}</div>
-      <div class="lin"><p class="texto-biblia" id="c-previa" style="margin:0;font-size:calc(var(--base) * 1.1)"><span class="ref">Juan 3:16</span></p></div></section>
-    <section class="card"><h2>Pantalla de proyección</h2>
+      <div class="lin"><p class="texto-biblia" id="c-previa" style="margin:0;font-size:calc(var(--base) * 1.1)"><span class="ref">Juan 3:16</span></p></div></section></div>
+    <div class="cfg-col"><section class="card"><h2>Pantalla de proyección</h2>
       ${c.pantalla ? `<div class="lin">Conectada a <b>${esc(c.pantalla)}</b> ${estado}</div>
         <div class="lin meta">Lo que proyectas aparece en la pantalla de la iglesia.</div>
         <div class="acciones"><button type="button" class="btn peq peli" id="c-desconectar">Desconectar la pantalla</button></div>`
@@ -380,7 +382,7 @@ function vistaConfig() {
       <div class="lin meta">Domingos, favoritos e historial. Guárdala fuera de la tablet (WhatsApp, Drive o correo).</div>
       <div class="acciones"><button type="button" class="btn pri peq" id="c-compartir">Compartir copia</button>
         <button type="button" class="btn peq" id="c-exportar">Descargar</button>
-        <label class="btn peq">Restaurar…<input type="file" id="c-importar" accept="application/json,.json,text/plain,.txt" hidden></label></div></section>
+        <label class="btn peq">Restaurar…<input type="file" id="c-importar" accept="application/json,.json,text/plain,.txt" hidden></label></div></section></div>
   </div>`;
 }
 
@@ -476,6 +478,9 @@ document.addEventListener("click", async ev => {
     return;
   }
   if (t.hasAttribute("data-volver")) return history.back();
+  // Inicio: de un salto a la pantalla principal (Domingo, o Biblia si no hay domingo), sin ir atrás varias veces.
+  // Lo proyectado sigue en la pantalla de la iglesia; "Seguir sermón" vuelve a la cita.
+  if (t.hasAttribute("data-inicio")) { editando = false; verDomingo = null; return ir(vistaInicial()); }
   if (t.hasAttribute("data-buscar")) { ir("biblia"); return $("#q")?.focus(); }
   if (t.hasAttribute("data-proyectar")) return proyectarActual();
   if (t.hasAttribute("data-reintentar")) return reintentar();
