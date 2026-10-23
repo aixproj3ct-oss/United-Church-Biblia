@@ -139,11 +139,12 @@ function abrirCapitulo(codigo, cap) {
   abrir({ codigo: codigoRef(ref), etiqueta: etiquetaRef(ref) }, { completo: true, navegando: vista === "lector" });
 }
 
-// "Buenos días, pastor Juan" según la hora de la tablet; sin nombre en Configuración, solo el saludo.
+// "Buenos días, pastor Juan" según la hora de la tablet. El nombre va tal como se escribió en Configuración
+// (con "pastor", "hermano" o lo que sea); sin nombre, solo el saludo.
 function saludo() {
   const h = new Date().getHours(), s = h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
-  const n = almacen.config().pastor.replace(/^pastor\s+/i, "");
-  return `<p class="saludo">${s}${n ? `, <b>pastor ${esc(n)}</b>` : ""}</p>`;
+  const n = almacen.config().pastor;
+  return `<p class="saludo">${s}${n ? `, <b>${esc(n)}</b>` : ""}</p>`;
 }
 
 // ---------- Domingo ----------
@@ -358,11 +359,10 @@ function vistaConfig() {
   const seg = (attr, ops, val) => `<span class="seg">${ops.map(([v, t, st]) => `<button class="${v === val ? "on" : ""}" data-${attr}="${v}" ${st ? `style="${st}"` : ""}>${t}</button>`).join("")}</span>`;
   const estado = !c.pantalla ? "" : sinRespuesta() ? `<span class="pill mal">● Sin respuesta</span>` : proy.respuesta ? `<span class="pill ok">● Responde</span>` : "";
   return `<h1>Configuración</h1><div class="cfg">
-    <section class="card"><h2>Saludo</h2>
-      <form id="f-pastor" class="lin" style="display:grid;gap:10px;border:0"><label class="meta" for="c-pastor">Nombre del pastor (la app dice «Buenos días, pastor …»)</label>
-        <input id="c-pastor" class="campo" maxlength="40" value="${esc(c.pastor)}" placeholder="Por ejemplo: Juan Pérez" autocomplete="off" autocapitalize="words" spellcheck="false">
-        <div><button class="btn pri peq">Guardar</button></div></form></section>
     <section class="card"><h2>Apariencia</h2>
+      <form id="f-pastor" class="lin saludo-f"><label for="c-pastor">Saludo<small>La app dice «Buenos días, …» con lo que escribas aquí</small></label>
+        <span class="saludo-campo"><input id="c-pastor" class="campo" maxlength="40" value="${esc(c.pastor)}" placeholder="Por ejemplo: pastor Juan Pérez" autocomplete="off" autocapitalize="sentences" spellcheck="false">
+        <button class="btn pri peq">Guardar</button></span></form>
       <div class="lin">Tema ${seg("tema", [["claro", "Claro"], ["oscuro", "Oscuro"]], c.tema)}</div>
       <div class="lin">Tamaño de letra ${seg("letra", [["normal", "A", "font-size:14px"], ["grande", "A", "font-size:18px"], ["muy-grande", "A", "font-size:22px"]], c.letra)}</div>
       <div class="lin">Orientación de la pantalla ${seg("orientacion", [["horizontal", "Horizontal"], ["vertical", "Vertical"]], c.orientacion)}</div>
@@ -609,7 +609,7 @@ document.addEventListener("submit", ev => {
   }
   if (f.id === "f-pastor") {
     almacen.guardarConfig({ pastor: $("#c-pastor").value }); pintar();
-    return avisoGuardado(almacen.config().pastor ? "Nombre guardado" : "Nombre borrado");
+    return avisoGuardado(almacen.config().pastor ? "Saludo guardado" : "Saludo borrado");
   }
   if (f.id === "f-pantalla") {
     const codigo = normalizarCodigo($("#c-pantalla").value);

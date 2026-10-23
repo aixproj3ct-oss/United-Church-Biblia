@@ -51,6 +51,9 @@ html[data-tema="oscuro"] .pill.ok{background:#12301e;color:#86efac}html[data-tem
 .cab-dom .ref{font-family:Montserrat,sans-serif;font-style:normal;font-weight:700;font-size:32px;line-height:1.2;letter-spacing:-.01em;color:var(--m1);display:block;margin-top:4px}
 .saludo{margin:0 0 14px;font-size:20px;font-weight:600;color:var(--sub)}
 .saludo b{color:var(--tinta)}
+.saludo-f label small{display:block;color:var(--sub);font-size:13px;margin-top:2px}
+.saludo-campo{display:flex;gap:8px;flex:1 1 260px;justify-content:flex-end}
+.saludo-campo .campo{flex:1;min-width:0;min-height:44px;padding:8px 12px}
 html[data-tema="oscuro"] .cab-dom .ref{color:var(--tinta)}
 .citas{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:10px}
 .cita{display:flex;align-items:center;gap:16px;padding:12px 18px;min-height:66px;width:100%;text-align:left;border:1px solid var(--borde-control);border-radius:var(--r2);background:var(--card)}
@@ -120,7 +123,7 @@ html[data-tema="oscuro"] .dom-plan .enlace{color:var(--azul)}
 .estrella{border:0;background:transparent;color:#b48a2c;min-width:48px;min-height:48px;display:grid;place-items:center}
 .serie{margin:16px 0 6px;font-weight:600;color:var(--oro-t)}
 /* Configuración */
-.cfg{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cfg{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
 .cfg .card{padding:16px 18px}.cfg h2{margin:0 0 10px;font-size:15px;color:var(--sub);font-weight:600}
 .seg{display:inline-flex;padding:4px;border-radius:999px;border:1px solid var(--borde-control);background:var(--fondo)}
 .seg button{padding:8px 16px;border-radius:999px;font-size:15px;font-weight:600;color:var(--sub);border:0;background:none;min-height:40px}
