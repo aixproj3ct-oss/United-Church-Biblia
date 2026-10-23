@@ -111,11 +111,12 @@ function htmlPunto(p, i, rev, quitar) {
 
 // El formulario guiado. `b` es el bosquejo que se edita (null = nuevo); `crudo`, si viene, manda sobre `b`
 // (para volver a dibujarlo sin perder lo escrito). Los ✓/✗ ya vienen puestos; la app los actualiza al escribir.
-export function vistaFormBosquejo(b, { maxPuntos = MAX_PUNTOS, crudo = null } = {}) {
+// `presentar`: HTML del botón "Presentar bosquejo" (lo arma la app, que sabe si hay pantalla); va bajo el título.
+export function vistaFormBosquejo(b, { maxPuntos = MAX_PUNTOS, crudo = null, presentar = "" } = {}) {
   const c = crudo ? normalizarCrudo(crudo, maxPuntos) : bosquejoACrudo(b);
   const rev = revisarCrudo(c);
   const n = c.puntos.length;
-  return `<button type="button" class="enlace" data-bq-volver>‹ Volver a los bosquejos</button><h1>${b ? "Editar bosquejo" : "Nuevo bosquejo"}</h1>
+  return `<button type="button" class="enlace" data-bq-volver>‹ Volver a los bosquejos</button><h1>${b ? "Editar bosquejo" : "Nuevo bosquejo"}</h1>${presentar}
     <form id="f-bosquejo" class="card form bq-form" novalidate>
       <section class="parte"><h2>1 · Título, fecha y cita principal</h2>
         ${campo("b-titulo", "Título del sermón", true,

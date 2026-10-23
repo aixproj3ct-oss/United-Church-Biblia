@@ -3,7 +3,7 @@
 const VERSION = "uc-v23";
 const ARCHIVOS = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest",
   "src/citas.js", "src/libros.js", "src/datos.js", "src/importar.js", "src/pasaje.js", "src/biblias.js", "src/lectura.js",
-  "src/busqueda.js", "src/fechas.js", "src/ui.js", "src/lector.js", "src/bosquejo/modelo.js", "src/bosquejo/cifrado.js", "src/bosquejo/envio.js", "src/bosquejo/vistas.js",
+  "src/busqueda.js", "src/fechas.js", "src/ui.js", "src/lector.js", "src/bosquejo/modelo.js", "src/bosquejo/cifrado.js", "src/bosquejo/envio.js", "src/bosquejo/vistas.js", "src/bosquejo/presentar.js",
   "src/proyeccion/mensajes.js", "src/proyeccion/canal.js", "src/proyeccion/partes.js", "src/proyeccion/lamina-bosquejo.js", "src/proyeccion/pantalla.js",
   "proyeccion.html", "proyeccion.css",
   "assets/fuentes/fuentes.css", "assets/fuentes/Montserrat-500-latin.woff2", "assets/fuentes/Montserrat-500-latin-ext.woff2",

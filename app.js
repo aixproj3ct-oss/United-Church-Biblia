@@ -12,10 +12,11 @@ import { proximoDomingo, fechaLarga, fechaCorta } from "./src/fechas.js";
 import { esc, aviso } from "./src/ui.js";
 import { citasDe, domingoParaBosquejo, MAX_PUNTOS } from "./src/bosquejo/modelo.js";
 import { vistaListaBosquejos, vistaFormBosquejo, revisarCrudo } from "./src/bosquejo/vistas.js";
+import { crearPresentacion, vistaPresentar, htmlContenido, htmlReloj } from "./src/bosquejo/presentar.js";
 import { LETRAS } from "./src/datos.js";
 import { proy, iniciarLector, conectarPantalla, hayPantalla, sinRespuesta, soltarPantalla, vistaLector, pintarLector,
   sincronizarProyeccion, proyectarActual, reintentar, cambiarParte, quitarDePantalla, alVolver,
-  luzDelLector, luzAlVolver, pintarHerramientas } from "./src/lector.js";
+  luzDelLector, luzAlVolver, pintarHerramientas, canalPantalla, alEstadoBosquejo, alProyectarPasaje, textoFallo } from "./src/lector.js";
 
 // Si algo falla sin que nadie lo atrape, el pastor ve un aviso corto (sin detalles) y el detalle queda en la consola.
 let ultimoFallo = 0;
@@ -31,15 +32,23 @@ window.addEventListener("unhandledrejection", ev => falloGeneral(ev.reason));
 const almacen = crearAlmacen();
 const biblias = crearBiblias();
 iniciarLector({ almacen, biblias });
+
+// Presentación del bosquejo: usa el mismo canal que el lector. Mientras se presenta, el lector no proyecta ningún pasaje, y al
+// revés: si se proyecta un pasaje, la presentación se suelta (la lámina del bosquejo ya no está en pantalla).
+const presentacion = crearPresentacion({ canal: canalPantalla, alCambiar: () => repintarPresentacion(),
+  alFallar: e => aviso(textoFallo(e), 6000) });
+alEstadoBosquejo(m => presentacion.recibirEstado(m));
+alProyectarPasaje(() => presentacion.soltar());
+let versionesP = [], relojP = null;
 const $ = (s, r = document) => r.querySelector(s);
 const enc = o => encodeURIComponent(JSON.stringify(o));
 const dec = s => JSON.parse(decodeURIComponent(s));
 const ic = (id, extra = "") => `<svg class="ico" ${extra}><use href="#i-${id}"/></svg>`;
 const hoyISO = () => new Date().toLocaleDateString("en-CA");
 const citaDe = r => ({ codigo: r.codigoRef, etiqueta: r.etiqueta });
-const VISTAS = ["domingo", "biblia", "bosquejo", "guardados", "config", "lector"];
+const VISTAS = ["domingo", "biblia", "bosquejo", "guardados", "config", "lector", "presentar"];
 const vistaInicial = () => almacen.domingoActual(hoyISO()) ? "domingo" : "biblia";
-const vistaDeHash = () => { const h = location.hash.slice(1); return VISTAS.includes(h) && h !== "lector" ? h : vistaInicial(); };
+const vistaDeHash = () => { const h = location.hash.slice(1); return VISTAS.includes(h) && h !== "lector" && h !== "presentar" ? h : vistaInicial(); };
 let vista = vistaDeHash(), favPendiente = null;
 // Domingo: el plan vigente o la lista con el editor (editando: true; domingoSel: el que se edita, null = nuevo).
 // verDomingo: un domingo anterior abierto solo para consultar (null = el vigente).
@@ -179,6 +188,7 @@ function vistaDomingo() {
     : prog ? `<button class="btn ambar" data-empezar="${esc(d.id)}" data-desde="${prog.i}">${ic("play")}Seguir sermón · cita ${prog.i + 1}</button>`
     : `<button class="btn ambar" data-empezar="${esc(d.id)}" data-desde="0">${ic("play")}Empezar sermón</button>`;
   // Un domingo anterior es solo para consultar: sus citas se abren sueltas, sin el plan en la barra.
+  const bq = almacen.bosquejos().find(x => x.domingoId === d.id);
   const citas = d.citas.map((c, i) => {
     const estado = prog?.i === i ? "actual" : prog?.vistas.includes(i) ? "leida" : "";
     const enPantalla = proy.activo && proy.codigo === c.codigo;
@@ -191,6 +201,7 @@ function vistaDomingo() {
   return `${saludo()}<div class="dom-grid"><section class="dom-plan">
       <div class="cab-dom"><div><div class="eti oro">${etiqueta} · ${esc(fechaLarga(d.fecha).toUpperCase())}</div>
         <span class="ref">${esc(d.titulo || "Sin título")}</span></div>${boton}</div>
+      ${bq ? botonPresentar(bq) : ""}
       <ol class="citas">${citas}</ol>
       <div class="acciones">${consulta ? `<button class="enlace" data-ver-domingo="">‹ Volver al domingo actual</button>` : ""}
         <button class="enlace" data-editar="${esc(d.id)}">${ic("edit")}Editar este domingo</button></div></section>
@@ -311,7 +322,59 @@ function vistaBosquejo() {
   if (!editandoB) return `${saludo()}${vistaListaBosquejos(almacen.bosquejos())}`;
   const b = bosquejoActual();
   if (!b) bosquejoSel = null; // el bosquejo ya no existe (p. ej. se restauró una copia): se trata como uno nuevo
-  return vistaFormBosquejo(b, { maxPuntos: MAX_PUNTOS });
+  return vistaFormBosquejo(b, { maxPuntos: MAX_PUNTOS, presentar: b ? botonPresentar(b) : "" });
+}
+
+// ---------- Presentar el bosquejo ----------
+// El botón de Domingo y del formulario. Sin pantalla conectada se ve apagado, con la razón (así se sabe que existe).
+function botonPresentar(b) {
+  const sigue = presentacion.activa() && presentacion.bosquejo().id === b.id, hay = hayPantalla();
+  return `<div class="dom-bq"><button type="button" class="btn marino" data-presentar="${esc(b.id)}" ${hay ? "" : "disabled"}>${ic("bosq")}${sigue ? "Seguir presentando" : "Presentar bosquejo"}</button>
+    ${hay ? "" : `<span class="meta">Conecta la pantalla en Configuración</span>`}</div>`;
+}
+const horaActual = () => new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+
+// Empieza (lámina 1 en la pantalla de la iglesia) o, si ya se estaba presentando este mismo bosquejo, vuelve a la vista sin tocar la pantalla.
+let iniciandoP = false; // dos toques seguidos no empiezan dos veces
+async function presentarBosquejo(id) {
+  const b = almacen.bosquejos().find(x => x.id === id);
+  if (!b) return aviso("No encontré ese bosquejo");
+  if (!hayPantalla()) return aviso("Conecta la pantalla en Configuración", 5000);
+  if (iniciandoP) return;
+  iniciandoP = true;
+  try {
+    if (vista === "bosquejo" && !await puedeSalirBosquejo()) return;
+    if (!(presentacion.activa() && presentacion.bosquejo().id === id)) {
+      const [ms, sigla] = await Promise.all([biblias.versiones(), biblias.principal()]);
+      versionesP = ms.map(m => m.sigla);
+      soltarPantalla(); // el pasaje que hubiera proyectado ya no está en pantalla
+      presentacion.empezar(b, sigla || "Biblia"); // sin Biblia en la tablet, la PC usa la suya
+    }
+    editandoB = false;
+    ir("presentar");
+  } finally { iniciandoP = false; }
+}
+// Redibuja lo que cambia (lámina en pantalla, notas, barra) sin tocar el encabezado; las notas conservan su desplazamiento.
+function repintarPresentacion() {
+  const c = vista === "presentar" && presentacion.activa() ? $("#p-cont") : null;
+  if (!c) return;
+  const antes = c.querySelector(".p-notas"), lam = antes?.dataset.lam, y = antes?.scrollTop ?? 0;
+  c.innerHTML = htmlContenido(presentacion);
+  document.querySelectorAll("#p-versiones button").forEach(b => { const on = b.dataset.pVersion === presentacion.sigla(); b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
+  const ahora = c.querySelector(".p-notas");
+  if (ahora && ahora.dataset.lam === lam) ahora.scrollTop = y;
+  pintarRelojP();
+}
+function pintarRelojP() { const r = $("#p-reloj"); if (r && presentacion.activa()) r.innerHTML = htmlReloj(horaActual(), presentacion.estado().minutos); }
+// El reloj se actualiza cada 15 s, solo mientras la vista de presentar está abierta.
+function ajustarRelojP() {
+  clearInterval(relojP); relojP = null;
+  if (vista === "presentar") relojP = setInterval(pintarRelojP, 15000);
+}
+async function quitarPresentacion() {
+  try { await presentacion.quitar(); }
+  catch (e) { return aviso(textoFallo(e), 6000); }
+  if (history.state?.vista === "presentar") history.back(); else ir(vistaInicial());
 }
 
 // Guarda el bosquejo y deja el domingo de esa fecha con su título y sus citas (si ya tenía otras, antes pregunta).
@@ -533,7 +596,7 @@ async function fijarOrientacion({ callado = false } = {}) {
 }
 
 function desconectar() {
-  almacen.guardarConfig({ pantalla: null }); soltarPantalla(); proy.respuesta = null;
+  almacen.guardarConfig({ pantalla: null }); soltarPantalla(); presentacion.soltar(); proy.respuesta = null;
   conectarPantalla(); pintar();
   return almacen.persistido();
 }
@@ -545,9 +608,13 @@ const repintarLector = () => pintarLector(lectura).then(sincronizarProyeccion)
 // ---------- Navegación ----------
 function pintar() {
   aplicarTema();
-  luzDelLector(vista === "lector"); // la tablet no se apaga mientras se lee
-  document.body.classList.toggle("en-lector", vista === "lector");
-  $("#vista").innerHTML = { domingo: vistaDomingo, biblia: vistaBiblia, bosquejo: vistaBosquejo, guardados: vistaGuardados, config: vistaConfig, lector: () => vistaLector(lectura) }[vista]();
+  const completa = vista === "lector" || vista === "presentar"; // a pantalla completa, sin la barra lateral
+  luzDelLector(completa); // la tablet no se apaga mientras se lee o se presenta
+  document.body.classList.toggle("en-lector", completa);
+  $("#vista").innerHTML = { domingo: vistaDomingo, biblia: vistaBiblia, bosquejo: vistaBosquejo, guardados: vistaGuardados, config: vistaConfig, lector: () => vistaLector(lectura),
+    presentar: () => vistaPresentar(presentacion, { hora: horaActual(), versiones: versionesP }) }[vista]();
+  ajustarRelojP();
+  if (vista === "presentar") pintarHerramientas();
   document.querySelectorAll(".nav [data-ir]").forEach(b => b.classList.toggle("activa", b.dataset.ir === vista));
   if (vista === "domingo" && editando) { previstaDomingo(); baseEd = valoresEditor(); }
   if (vista === "bosquejo" && editandoB) { revisarFormBq(); baseBq = crudoDeForm(); }
@@ -562,7 +629,7 @@ function ir(v, nueva = false) {
 }
 window.addEventListener("popstate", ev => {
   const v = VISTAS.includes(ev.state?.vista) ? ev.state.vista : vistaDeHash();
-  if (v === "lector" && !ev.state?.lectura) vista = vistaInicial();
+  if ((v === "lector" && !ev.state?.lectura) || (v === "presentar" && !presentacion.activa())) vista = vistaInicial();
   else { vista = v; if (v === "lector") { lectura = ev.state.lectura; alVolver(lectura); } }
   pintar(); $("#vista").scrollTop = 0;
 });
@@ -588,6 +655,13 @@ document.addEventListener("click", async ev => {
   // Lo proyectado sigue en la pantalla de la iglesia; "Seguir sermón" vuelve a la cita.
   if (t.hasAttribute("data-inicio")) { editando = false; verDomingo = null; return ir(vistaInicial()); }
   if (t.hasAttribute("data-buscar")) { ir("biblia"); return $("#q")?.focus(); }
+  if (d.presentar !== undefined) return presentarBosquejo(d.presentar);
+  if (t.hasAttribute("data-p-ant")) return presentacion.anterior();
+  if (t.hasAttribute("data-p-sig")) return presentacion.siguiente();
+  if (d.pIr !== undefined) return presentacion.irA(Number(d.pIr));
+  if (d.pVersion) return presentacion.cambiarVersion(d.pVersion);
+  if (t.hasAttribute("data-p-reintentar")) return presentacion.reintentar();
+  if (t.hasAttribute("data-p-quitar")) return quitarPresentacion();
   if (t.hasAttribute("data-proyectar")) return proyectarActual();
   if (t.hasAttribute("data-reintentar")) return reintentar();
   if (d.parte) return cambiarParte(Number(d.parte));

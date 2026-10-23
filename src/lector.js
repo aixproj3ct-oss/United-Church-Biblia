@@ -26,6 +26,11 @@ const EN_ESPERA = "La pantalla de la iglesia quedó en espera";
 export const proy = { activo: false, seguir: false, enviado: null, codigo: null, completo: null, sigla: null, partes: 1, parte: 0,
   esperando: null, confirmado: false, error: null, sinTexto: 0, fallo: null, respuesta: null };
 let canal = null, cerrar = null, almacen = null, biblias = null;
+// Ganchos de la presentación del bosquejo (src/bosquejo/presentar.js): recibe los estados de la pantalla que traen `bosquejo`
+// y se entera cuando se proyecta un pasaje (entonces la lámina del bosquejo ya no está en pantalla).
+let enEstadoBosquejo = null, enProyectarPasaje = null;
+export const alEstadoBosquejo = fn => { enEstadoBosquejo = typeof fn === "function" ? fn : null; };
+export const alProyectarPasaje = fn => { enProyectarPasaje = typeof fn === "function" ? fn : null; };
 let mostrada = { lectura: null, sigla: null }, principal = null, listo = Promise.resolve(), gen = 0, envioNo = 0;
 // Reloj, temporizador y fábrica del canal se inyectan para probar sin esperar ni red.
 let ahora = () => Date.now(), esperar = (f, ms) => setTimeout(f, ms), fabricaCanal = crearCanal;
@@ -66,6 +71,7 @@ function cambio() { guardarProy(); pintarBarra(); }
 function recibirEstado(m) {
   if (m.de !== "pantalla" || m.tipo !== "estado") return;
   proy.respuesta = ahora();
+  if (m.bosquejo !== undefined) return enEstadoBosquejo?.(m); // una lámina del bosquejo: la lógica del pasaje no se entera
   if (m.espera) { // la pantalla quedó en espera por su cuenta (se reinició o pulsaron Esc en la PC)
     if (!proy.activo || proy.esperando !== null) return; // si se acaba de enviar algo, manda la respuesta a ese envío
     soltarPantalla();
@@ -99,6 +105,8 @@ export function consultarPantalla() {
   canal.publicar(msgConsulta(ahora())).catch(() => { /* sin red: la barra ya dice "Sin confirmar" */ });
 }
 export const hayPantalla = () => !!canal;
+// El canal de la pantalla conectada (o null): la presentación del bosquejo publica por el mismo.
+export const canalPantalla = () => canal;
 
 const claveDe = (lectura, sigla) => `${lectura.cita.codigo}|${sigla}|${lectura.completo}`;
 
@@ -140,6 +148,7 @@ export async function enviarPasaje(lectura, sigla) {
     aviso(textoFallo(e), 6000); cambio(); return false;
   }
   esperar(pintarBarra, 5200);
+  enProyectarPasaje?.(); // ya se publicó el pasaje: una presentación del bosquejo en curso se suelta
   return true;
 }
 
