@@ -72,6 +72,7 @@ function recibirEstado(m) {
   if (m.de !== "pantalla" || m.tipo !== "estado") return;
   proy.respuesta = ahora();
   if (m.bosquejo !== undefined) return enEstadoBosquejo?.(m); // una lámina del bosquejo: la lógica del pasaje no se entera
+  if (m.espera && enEstadoBosquejo?.(m) === true) return; // hay una presentación del bosquejo y se hizo cargo
   if (m.espera) { // la pantalla quedó en espera por su cuenta (se reinició o pulsaron Esc en la PC)
     if (!proy.activo || proy.esperando !== null) return; // si se acaba de enviar algo, manda la respuesta a ese envío
     soltarPantalla();

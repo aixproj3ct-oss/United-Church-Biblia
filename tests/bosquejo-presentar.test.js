@@ -122,9 +122,9 @@ test("anterior en la lámina 0 no hace nada", async () => {
 });
 
 test("siguiente en la última lámina no hace nada", async () => {
-  const { pres, publicados } = preparar();
+  const { pres, publicados, pantalla } = preparar();
   await pres.empezar(bosquejo(), "RVR1960");
-  await pres.irA(5);
+  await pres.irA(5); pantalla(5);
   const antes = publicados.length;
   assert.equal(await pres.siguiente(), false);
   assert.equal(publicados.length, antes);
@@ -254,6 +254,7 @@ test("si publicar falla queda 'sin', avisa el error y reintentar vuelve a mandar
   const falla = { activo: false, error: { tipo: "red" } };
   const { pres, publicados, fallos } = preparar({ falla });
   await pres.empezar(bosquejo(), "RVR1960");
+  pres.recibirEstado(msgEstado({ bosquejo: "b1", lamina: 0, partes: 1, parte: 0 }, 1));
   falla.activo = true;
   assert.equal(await pres.siguiente(), false);
   assert.equal(fallos.length, 1);
@@ -273,7 +274,7 @@ test("un fallo viejo no marca 'sin' si ya se envió algo más nuevo", async () =
   const pres = crearPresentacion({ canal, ahora: r.ahora, esperar: r.esperar });
   const e = pres.empezar(bosquejo(), "RVR1960");
   lentos[0].res(); await e;
-  const a = pres.siguiente(), b = pres.siguiente();
+  const a = pres.irA(1), b = pres.irA(2);
   lentos[1].rej({ tipo: "red" }); lentos[2].res();
   await a; await b;
   assert.equal(pres.estado().i, 2);
@@ -295,7 +296,7 @@ test("cambiarVersion vuelve a publicar la lámina actual en la parte 0 con la ve
 test("las horas de los mensajes siempre crecen (la PC descarta lo que no es más nuevo)", async () => {
   const { pres, publicados } = preparar(); // el reloj falso no avanza entre envíos
   await pres.empezar(bosquejo(), "RVR1960");
-  await pres.siguiente(); await pres.siguiente(); await pres.anterior();
+  await pres.irA(1); await pres.irA(2); await pres.anterior();
   const ts = publicados.map(m => m.t);
   assert.deepEqual(ts, [...ts].sort((a, b) => a - b));
   assert.equal(new Set(ts).size, ts.length);
@@ -352,6 +353,63 @@ test("notas devuelve las de la lámina actual, tal cual las escribió el pastor"
   await pres.irA(1);
   assert.equal(pres.notas().titulo, "Punto 1");
   assert.deepEqual(pres.notas().partes.map(p => p.eti), ["Explicación", "Ilustración"]);
+});
+
+test("dos toques seguidos en siguiente antes de que la PC informe las partes: solo avanza una lámina", async () => {
+  const { r, pres, publicados, pantalla } = preparar();
+  await pres.empezar(bosquejo(), "RVR1960");
+  pantalla(0);
+  await pres.siguiente();
+  assert.equal(await pres.siguiente(), false, "sin confirmación de la lámina 1 no se salta");
+  assert.equal(publicados.length, 2);
+  assert.match(htmlContenido(pres), /data-p-sig disabled/);
+  pantalla(1, 2, 0);
+  await pres.siguiente();
+  assert.deepEqual([ultima({ publicados }).i, ultima({ publicados }).parte], [1, 1]);
+  // una PC muda no traba al pastor más de 5 s
+  await pres.irA(3);
+  await r.avanzar(5100);
+  assert.equal(pres.estado().envio, "sin");
+  assert.equal(await pres.siguiente(), true);
+  assert.equal(pres.estado().i, 4);
+});
+
+test("espera por su cuenta (Esc en la PC) sin envío pendiente: 'sin', aviso y se puede reintentar", async () => {
+  const avisos = [];
+  const r = reloj(), publicados = [];
+  const pres = crearPresentacion({ canal: { publicar: async m => { publicados.push(m); } }, ahora: r.ahora, esperar: r.esperar, alEsperar: () => avisos.push(1) });
+  await pres.empezar(bosquejo(), "RVR1960");
+  pres.recibirEstado(msgEstado({ bosquejo: "b1", lamina: 0, partes: 1, parte: 0 }, 1));
+  assert.equal(pres.estado().envio, "ok");
+  assert.equal(pres.recibirEstado(msgEstado({ espera: true }, 2)), true);
+  assert.equal(pres.estado().envio, "sin");
+  assert.equal(textoEnvio(pres.estado()), "La pantalla de la iglesia quedó en espera");
+  assert.equal(avisos.length, 1);
+  assert.match(htmlContenido(pres), /data-p-reintentar/);
+  await pres.reintentar();
+  assert.equal(ultima({ publicados }).tipo, "lamina");
+  assert.equal(pres.estado().envio, "enviando");
+  pres.recibirEstado(msgEstado({ bosquejo: "b1", lamina: 0, partes: 1, parte: 0 }, 3));
+  assert.equal(pres.estado().envio, "ok");
+});
+
+test("una espera que responde a un envío nuestro o a nuestro Quitar se ignora", async () => {
+  const avisos = [];
+  const r = reloj(), publicados = [];
+  const pres = crearPresentacion({ canal: { publicar: async m => { publicados.push(m); } }, ahora: r.ahora, esperar: r.esperar, alEsperar: () => avisos.push(1) });
+  await pres.empezar(bosquejo(), "RVR1960");
+  pres.recibirEstado(msgEstado({ espera: true }, 1)); // llega con el envío pendiente
+  assert.equal(pres.estado().envio, "enviando");
+  await pres.quitar();
+  assert.equal(pres.recibirEstado(msgEstado({ espera: true }, 2)), false, "ya no hay presentación: el lector decide");
+  assert.equal(avisos.length, 0);
+});
+
+test("consultar publica una consulta", async () => {
+  const { pres, publicados } = preparar();
+  await pres.empezar(bosquejo(), "RVR1960");
+  await pres.consultar();
+  assert.equal(ultima({ publicados }).tipo, "consulta");
 });
 
 // ---------- La vista ----------
@@ -462,11 +520,34 @@ test("lector: alEstadoBosquejo recibe todo estado con bosquejo y los pasajes no 
   assert.equal(L.proy.activo, false);
   assert.equal(L.proy.codigo, null, "la lógica del pasaje ni se entera");
   llega(msgEstado({ codigo: "JHN.3.16", partes: 1, parte: 0, sigla: "TLA", completo: false }, 6));
+  assert.equal(recibidos.length, 1, "los estados de pasaje no van a la presentación");
   llega(msgEstado({ espera: true }, 7));
-  assert.equal(recibidos.length, 1, "los estados de pasaje y de espera no van a la presentación");
+  assert.equal(recibidos.length, 2, "el de espera sí: la presentación decide si le importa");
   L.alEstadoBosquejo(null);
   llega(estadoB); // sin oyente: no pasa nada
-  assert.equal(recibidos.length, 1);
+  assert.equal(recibidos.length, 2);
+});
+
+test("lector: sin presentación activa, una espera de la pantalla se trata como siempre (pasaje soltado)", async () => {
+  const { llega } = lectorConCanal();
+  L.alEstadoBosquejo(() => false); // hay oyente pero no se hace cargo
+  await L.pintarLector(lectura());
+  await L.proyectarActual();
+  llega(msgEstado({ codigo: "JHN.3.16", partes: 1, parte: 0, sigla: "TLA", completo: false }, 9));
+  assert.equal(L.proy.activo, true);
+  llega(msgEstado({ espera: true }, 10));
+  assert.equal(L.proy.activo, false, "el pasaje se suelta");
+  L.alEstadoBosquejo(null);
+});
+
+test("lector: con presentación activa, la espera la atiende la presentación y el pasaje no se toca", () => {
+  const { llega } = lectorConCanal();
+  Object.assign(L.proy, { activo: true, esperando: null });
+  L.alEstadoBosquejo(() => true);
+  llega(msgEstado({ espera: true }, 11));
+  assert.equal(L.proy.activo, true);
+  L.alEstadoBosquejo(null);
+  L.soltarPantalla();
 });
 
 test("lector: un estado con bosquejo no cambia el estado del pasaje que se esté proyectando", async () => {

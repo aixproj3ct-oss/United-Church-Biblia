@@ -1,7 +1,7 @@
 // Presentación del bosquejo desde la tablet: qué lámina está en la pantalla de la iglesia, cómo avanzar y retroceder,
 // y la vista del pastor (lámina chica, notas privadas, índice y estado). Sin DOM: la app lo conecta con los botones.
 // Por el canal solo sale publicoDe(b) (títulos, frases y referencias); las notas privadas se quedan en la tablet.
-import { msgLamina, msgEspera } from "../proyeccion/mensajes.js";
+import { msgLamina, msgEspera, msgConsulta } from "../proyeccion/mensajes.js";
 import { refDeCodigo, etiquetaRef } from "../pasaje.js";
 import { htmlTitulo, htmlRecuerda, htmlPunto } from "../proyeccion/lamina-bosquejo.js";
 import { laminasDe, publicoDe, notasDe } from "./modelo.js";
@@ -17,13 +17,13 @@ const ERRORES = {
 
 // canal: el de la pantalla (o una función que lo da, porque conectar otra pantalla cambia de canal).
 // alCambiar(): algo cambió y la vista debe redibujarse. alFallar(e): no se pudo publicar (para avisar el motivo).
-export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (f, ms) => setTimeout(f, ms), alCambiar = () => {}, alFallar = () => {} }) {
+export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (f, ms) => setTimeout(f, ms), alCambiar = () => {}, alFallar = () => {}, alEsperar = () => {} }) {
   const elCanal = () => (typeof canal === "function" ? canal() : canal);
   // b: el bosquejo completo (con notas); pub: lo que viaja; lams: sus láminas. Todo null cuando no hay presentación.
   let b = null, pub = null, lams = [], sigla = "", inicio = 0;
   let i = 0, parte = 0, partes = 1;          // dónde está el pastor y cuántas partes dijo la PC que tiene esta lámina
   let esperando = null, confirmado = false, fallo = false, error = null, sinTexto = 0;
-  let envioNo = 0, ultimaT = 0;
+  let envioNo = 0, ultimaT = 0, enEspera = false, quitando = false;
 
   // La PC descarta lo que no sea más nuevo que lo último: la hora de cada envío sube siempre, aunque el reloj no se mueva.
   const hora = () => (ultimaT = Math.max(ahora(), ultimaT + 1));
@@ -33,7 +33,7 @@ export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (
   async function publicarLamina() {
     const mio = ++envioNo;
     // El estado se actualiza antes de esperar al canal: dos toques seguidos no se pisan.
-    esperando = ahora(); confirmado = false; fallo = false; error = null; sinTexto = 0;
+    esperando = ahora(); confirmado = false; fallo = false; error = null; sinTexto = 0; enEspera = false;
     aviso();
     try { await elCanal().publicar(msgLamina({ bosquejo: pub, i, sigla, parte }, hora())); }
     catch (e) {
@@ -61,6 +61,7 @@ export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (
     // Primero las partes de la lámina actual (las que informó la PC), después la lámina siguiente. En la última no hace nada.
     async siguiente() {
       if (!b) return false;
+      if (pres.estado().envio === "enviando") return false; // aún no se sabe cuántas partes tiene esta lámina: no se salta ninguna
       if (partes > parte + 1) parte++;
       else if (i < lams.length - 1) { i++; parte = 0; partes = 1; }
       else return false;
@@ -91,26 +92,37 @@ export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (
     async quitar() {
       if (!b) return;
       const c = elCanal();
-      if (c) await c.publicar(msgEspera(hora())); // sin pantalla conectada no hay nada que dejar en espera
+      quitando = true; // la respuesta "espera" de la PC a este Quitar no es una sorpresa
+      try { if (c) await c.publicar(msgEspera(hora())); } // sin pantalla conectada no hay nada que dejar en espera
+      finally { quitando = false; }
       pres.soltar();
     },
     // Termina la presentación sin publicar nada (la pantalla ya pasó a otra cosa, p. ej. a un pasaje).
     soltar() { b = pub = null; lams = []; esperando = null; confirmado = false; fallo = false; error = null; envioNo++; aviso(); },
 
-    // Lo que contesta la PC. Solo cuenta si es de esta lámina y de la parte que se pidió (o un error de esta lámina).
+    // Pregunta a la PC qué muestra (al volver a la vista); su respuesta llega por recibirEstado.
+    async consultar() { if (!b) return; try { await elCanal()?.publicar(msgConsulta(hora())); } catch { /* sin red: el estado ya lo dirá */ } },
+
+    // Lo que contesta la PC. Devuelve true si la presentación se hizo cargo del mensaje. Solo cuenta si es de esta lámina y de la parte que se pidió (o un error de esta lámina).
     recibirEstado(m) {
-      if (!b || !m || m.de !== "pantalla" || m.tipo !== "estado" || m.bosquejo !== pub.id || m.lamina !== i) return;
+      if (b && m?.de === "pantalla" && m.tipo === "estado" && m.espera === true) { // la PC quedó en espera por su cuenta (Esc o reinicio)
+        if (esperando !== null || quitando) return true; // responde a un envío nuestro o a Quitar: no es sorpresa
+        enEspera = true; confirmado = false;
+        try { alEsperar(); } catch { /* sin aviso */ }
+        aviso(); return true;
+      }
+      if (!b || !m || m.de !== "pantalla" || m.tipo !== "estado" || m.bosquejo !== pub.id || m.lamina !== i) return false;
       if (m.error) { error = m.error; esperando = null; confirmado = true; sinTexto = m.sinTexto ?? 0; return aviso(); }
       if (m.parte !== parte) return;
-      partes = m.partes; esperando = null; confirmado = true; error = null; sinTexto = m.sinTexto ?? 0;
+      partes = m.partes; esperando = null; confirmado = true; error = null; enEspera = false; sinTexto = m.sinTexto ?? 0;
       aviso();
     },
 
     // enviando: hasta que la PC confirma; ok: confirmó; sin: pasaron 5 s sin respuesta o no se pudo publicar; error: la PC no pudo mostrarla.
     estado() {
       const tarde = esperando !== null && ahora() - esperando > ESPERA_MS;
-      const envio = error ? "error" : fallo || tarde || (!confirmado && esperando === null) ? "sin" : esperando !== null ? "enviando" : "ok";
-      return { lamina: lams[i] ?? null, i, parte, partes, envio, error, sinTexto, total: lams.length,
+      const envio = error ? "error" : enEspera || fallo || tarde || (!confirmado && esperando === null) ? "sin" : esperando !== null ? "enviando" : "ok";
+      return { lamina: lams[i] ?? null, i, parte, partes, envio, error, espera: enEspera, sinTexto, total: lams.length,
         minutos: b ? Math.max(0, Math.floor((ahora() - inicio) / 60000)) : 0 };
     },
 
@@ -153,6 +165,7 @@ export function htmlMini(publico, lam) {
 // El motivo en español de lo que dice el estado de envío.
 export function textoEnvio(est) {
   if (est.envio === "error") return ERRORES[est.error] ?? ERRORES.mostrar;
+  if (est.espera) return "La pantalla de la iglesia quedó en espera";
   if (est.envio === "sin") return "Sin respuesta";
   if (est.envio === "enviando") return "Enviando…";
   return est.sinTexto ? "En pantalla · falta el versículo" : "En pantalla";
@@ -198,7 +211,7 @@ export function htmlContenido(pres) {
     <footer class="barra p-barra">
       <button type="button" class="btn p-grande" data-p-ant ${est.i === 0 && est.parte === 0 ? "disabled" : ""}>${ic("izq")}Anterior</button>
       <nav class="p-indice" aria-label="Láminas">${idx}</nav>
-      <button type="button" class="btn p-grande p-sig" data-p-sig ${ultima ? "disabled" : ""}>Siguiente${ic("der")}</button>
+      <button type="button" class="btn p-grande p-sig" data-p-sig ${ultima || est.envio === "enviando" ? "disabled" : ""}>Siguiente${ic("der")}</button>
       <div class="zona der"><span class="estado ${mal ? "mal" : est.envio === "enviando" ? "envio" : ""}"><i></i>${esc(textoEnvio(est))}</span>
         ${mal ? `<button type="button" class="btn" data-p-reintentar>Reintentar</button>` : ""}
         <button type="button" class="btn peli quitar" data-p-quitar>Quitar</button></div></footer>`;

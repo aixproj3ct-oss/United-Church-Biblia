@@ -36,7 +36,7 @@ iniciarLector({ almacen, biblias });
 // Presentación del bosquejo: usa el mismo canal que el lector. Mientras se presenta, el lector no proyecta ningún pasaje, y al
 // revés: si se proyecta un pasaje, la presentación se suelta (la lámina del bosquejo ya no está en pantalla).
 const presentacion = crearPresentacion({ canal: canalPantalla, alCambiar: () => repintarPresentacion(),
-  alFallar: e => aviso(textoFallo(e), 6000) });
+  alFallar: e => aviso(textoFallo(e), 6000), alEsperar: () => aviso("La pantalla de la iglesia quedó en espera", 6000) });
 alEstadoBosquejo(m => presentacion.recibirEstado(m));
 alProyectarPasaje(() => presentacion.soltar());
 let versionesP = [], relojP = null;
@@ -350,6 +350,7 @@ async function presentarBosquejo(id) {
       soltarPantalla(); // el pasaje que hubiera proyectado ya no está en pantalla
       presentacion.empezar(b, sigla || "Biblia"); // sin Biblia en la tablet, la PC usa la suya
     }
+    else presentacion.consultar(); // al volver: que la pantalla diga qué muestra
     editandoB = false;
     ir("presentar");
   } finally { iniciandoP = false; }
