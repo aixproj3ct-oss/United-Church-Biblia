@@ -645,7 +645,8 @@ function vistaConfig() {
     <section class="card"><h2>Teléfono</h2>
       ${c.telefono ? `<div class="lin meta">Código de esta tablet</div><div class="codigo-tel" id="c-codigo-tel">${esc(c.telefono)}</div>
         <div class="lin meta">En el teléfono, abre esta app, escribe el bosquejo y toca «Enviar a la tablet». La primera vez te pedirá este código.</div>
-        <div class="acciones"><button type="button" class="btn peq peli" id="c-cambiar-codigo">Cambiar código</button></div>`
+        <div class="acciones"><button type="button" class="btn peq" id="c-cambiar-codigo">Cambiar código</button>
+          <button type="button" class="btn peq peli" id="c-borrar-codigo">Borrar código</button></div>`
       : `<div class="lin meta">Escribe el bosquejo en el teléfono y recíbelo aquí, listo para presentar.</div>
         <div class="acciones"><button type="button" class="btn pri peq" id="c-conectar-tel">Conectar un teléfono</button></div>`}</section>
     <section class="card" id="c-versiones"><h2>Versiones de la Biblia</h2><p class="meta">Cargando…</p></section>
@@ -781,6 +782,12 @@ document.addEventListener("click", async ev => {
     if (!await confirmar("¿Cambiar el código? El teléfono que usas ahora ya no podrá enviar hasta que le escribas el código nuevo.", "Sí, cambiar", "Cancelar")) return;
     const ok = almacen.guardarConfig({ telefono: generarCodigo() }); conectarTelefono(); pintar();
     return avisoGuardado(ok && "Código nuevo listo");
+  }
+  // Borrar el código: este aparato deja de recibir bosquejos y vuelve a tener «Enviar a la tablet».
+  if (t.id === "c-borrar-codigo") {
+    if (!await confirmar("¿Borrar el código? Este aparato dejará de recibir bosquejos del teléfono y podrá enviarlos a otra tablet.", "Sí, borrar", "Cancelar")) return;
+    const ok = almacen.guardarConfig({ telefono: null }); conectarTelefono(); pintar();
+    return avisoGuardado(ok && "Código borrado: este aparato ya puede enviar a la tablet");
   }
   if (t.id === "c-desconectar") {
     const queda = proy.activo ? " Lo que está proyectado se queda en la pantalla." : "";
