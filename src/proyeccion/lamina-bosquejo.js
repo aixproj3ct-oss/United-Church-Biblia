@@ -37,5 +37,5 @@ export function htmlPunto(pub, p, { ref = "", cuerpo = "", aviso = "", tam = TAM
 
 // Lámina final: "¡Recuerda!", la frase y el título del bosquejo en el pie.
 export const htmlRecuerda = pub =>
-  `<div class="b-centro"><div class="b-eti">¡Recuerda!</div><div class="b-frase">${esc(pub.recuerda)}</div></div>`
+  `<div class="b-centro"><div class="b-eti b-recuerda">¡Recuerda!</div><div class="b-frase">${esc(pub.recuerda)}</div></div>`
   + `<div class="pie">${esc(pub.titulo)}</div>`;

@@ -35,6 +35,8 @@ body.con-panel{cursor:default} /* con el panel F2 abierto el cursor se ve */
 .b-cita{margin-top:30px;font-size:44px;font-weight:500;opacity:.9;text-shadow:0 2px 18px rgba(0,0,0,.55)}
 .b-frase{font-size:64px;font-weight:600;line-height:1.3;text-shadow:0 2px 18px rgba(0,0,0,.55)}
 .b-centro .b-eti{color:var(--oro);opacity:1;margin-bottom:30px}
+/* «¡Recuerda!» grande, para que se lea desde el fondo de la iglesia (pedido del usuario 2026-10-23) */
+.b-centro .b-recuerda{font-size:46px;font-weight:700;letter-spacing:.14em;margin-bottom:34px}
 /* Cambio suave entre pasajes y partes */
 .caja.entra,.espera.entra{animation:entra .4s ease-out}
 @keyframes entra{from{opacity:0}to{opacity:1}}
