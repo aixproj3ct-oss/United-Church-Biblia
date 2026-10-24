@@ -62,3 +62,6 @@ body.con-panel{cursor:default} /* con el panel F2 abierto el cursor se ve */
 .fondos img{width:100%;height:100%;object-fit:cover;display:block}
 .punto{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:6px}.punto.ok{background:#22c55e}
 .aviso{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#e8edf5;color:#000;padding:12px 18px;border-radius:12px;z-index:6;font-size:15px}
+
+/* Palabras larguísimas sin espacios se parten en vez de salirse de la lámina */
+.b-titulo,.b-frase,.b-punto,.b-cita{overflow-wrap:anywhere}
