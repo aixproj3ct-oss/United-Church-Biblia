@@ -295,13 +295,52 @@ test("la misma versión entregada dos veces: la segunda es repetida", async () =
   assert.equal(a.bosquejos().length, 1);
 });
 
-test("tras editar en la tablet, lo que envía el teléfono lo reemplaza", async () => {
+test("tras editar en la tablet, un envío NUEVO del teléfono (hora posterior) lo reemplaza", async () => {
   const a = almacenEn("2026-10-23T14:00:00Z");
   await recibirBosquejo(a, llegado());
-  assert.ok(a.bosquejos()[0].recibidoActualizado);
   const { recibidoActualizado, ...editado } = a.bosquejos()[0]; // el formulario no lo lleva
   a.guardarBosquejo({ ...editado, titulo: "Editado en la tablet" });
-  assert.equal(a.bosquejos()[0].recibidoActualizado, undefined);
-  assert.equal((await recibirBosquejo(a, llegado())).estado, "guardado"); // aun igual de viejo, gana el último envío
-  assert.equal(a.bosquejos()[0].titulo, "Salvos por gracia");
+  assert.equal(a.bosquejos()[0].recibidoActualizado, recibidoActualizado, "la edición conserva la hora del teléfono recibida");
+  const r = await recibirBosquejo(a, llegado({ titulo: "Nuevo del teléfono", actualizado: "2026-10-23T11:00:00.000Z" }));
+  assert.equal(r.estado, "guardado");
+  assert.equal(a.bosquejos()[0].titulo, "Nuevo del teléfono");
+});
+
+test("editar en la tablet y procesar de nuevo el mismo envío: repetido, y la edición queda", async () => {
+  const a = almacenEn("2026-10-23T14:00:00Z");
+  await recibirBosquejo(a, llegado());
+  const { recibidoActualizado, ...editado } = a.bosquejos()[0];
+  a.guardarBosquejo({ ...editado, titulo: "Editado en la tablet" });
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "repetido");
+  assert.equal(a.bosquejos()[0].titulo, "Editado en la tablet");
+});
+
+test("si la escritura falló al recibir, el mismo envío se reintenta y queda escrito", async () => {
+  const m = new Map();
+  let falla = true;
+  const almacenFalla = { getItem: k => m.get(k) ?? null, setItem: (k, v) => { if (falla) throw new Error("cuota"); m.set(k, String(v)); } };
+  const a = crearAlmacen(almacenFalla, () => new Date("2026-10-23T14:00:00Z"));
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "sin_espacio");
+  falla = false;
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "guardado", "no es repetido: nunca quedó escrito");
+  assert.equal(a.persistido(), true);
+  assert.match([...m.values()].join(""), /Salvos por gracia/);
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "repetido");
+});
+
+test("el receptor salta los envíos ya procesados que se le dieron y avisa los últimos 50", async () => {
+  const b = ejemplo(), clave = await claveDe(COD);
+  const canal = canalFalso();
+  await enviarBosquejo(canal, clave, b, { ...relojRapido(), esperarConfirmacion: 1 });
+  const ms = canal.publicados, envio = ms[0].envio;
+  const llegados = [], guardados = [];
+  const rx = crearReceptor(clave, x => llegados.push(x), { yaHechos: [envio], alHechos: ids => guardados.push(ids) });
+  for (const m of ms) await rx.recibir(m);
+  assert.deepEqual(llegados, [], "ya procesado en una sesión anterior");
+  const rx2 = crearReceptor(clave, x => llegados.push(x), { yaHechos: Array.from({ length: 60 }, (_, i) => "viejo" + i), alHechos: ids => guardados.push(ids) });
+  for (const m of ms) await rx2.recibir(m);
+  assert.equal(llegados.length, 1);
+  assert.equal(guardados.length, 1);
+  assert.equal(guardados[0].length, 50);
+  assert.equal(guardados[0].at(-1), envio);
 });

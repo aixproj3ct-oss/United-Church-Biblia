@@ -4,7 +4,7 @@ import { errorCanal } from "../proyeccion/canal.js";
 import { cifrar, descifrar } from "./cifrado.js";
 import { sanearBosquejo } from "./modelo.js";
 
-const MAX_TROZO = 3000, MAX_TROZOS = 100, MAX_ENVIO = 40, MAX_PENDIENTES = 20;
+const MAX_TROZO = 3000, MAX_TROZOS = 100, MAX_ENVIO = 40, MAX_PENDIENTES = 20, MAX_HECHOS = 50;
 const idValido = id => typeof id === "string" && id.length >= 1 && id.length <= MAX_ENVIO;
 
 export function trozos(texto, max = MAX_TROZO) {
@@ -65,9 +65,11 @@ export async function enviarBosquejo(canal, clave, b, { esperarConfirmacion = 80
 // alBosquejo(b, envio) una sola vez. Lo cifrado con otro código o dañado se ignora sin error.
 // recibir devuelve una promesa que termina cuando alBosquejo terminó; si alBosquejo falla, esa promesa falla y el envío
 // puede reprocesarse cuando sus trozos lleguen otra vez.
-export function crearReceptor(clave, alBosquejo) {
+// `yaHechos` (ids de envíos ya procesados en una sesión anterior) se saltan; `alHechos(ids)` recibe los últimos 50 ids
+// cada vez que un envío termina de procesarse, para que quien llama los guarde (así el historial de 12 h no los repite).
+export function crearReceptor(clave, alBosquejo, { yaHechos = [], alHechos = () => {} } = {}) {
   const pendientes = new Map(); // envio -> { total, partes: Map(n -> datos) }
-  const hechos = new Set();
+  const hechos = new Set(Array.isArray(yaHechos) ? yaHechos.filter(idValido) : []);
   return {
     async recibir(msg) {
       if (!msg || msg.de !== "telefono" || msg.tipo !== "bosquejo" || hechos.has(msg.envio)) return;
@@ -83,9 +85,9 @@ export function crearReceptor(clave, alBosquejo) {
       pendientes.delete(msg.envio);
       hechos.add(msg.envio);
       const b = sanearBosquejo(await descifrar(clave, Array.from({ length: e.total }, (_, i) => e.partes.get(i)).join("")));
-      if (!b) return;
       // Si alBosquejo falla (p. ej. la tablet no pudo guardar), el envío no queda como hecho: al volver a llegar se procesa de nuevo.
-      try { await alBosquejo(b, msg.envio); } catch (err) { hechos.delete(msg.envio); throw err; }
+      try { if (b) await alBosquejo(b, msg.envio); } catch (err) { hechos.delete(msg.envio); throw err; }
+      try { alHechos([...hechos].slice(-MAX_HECHOS)); } catch { /* sin dónde guardar: solo se recuerda mientras la app esté abierta */ }
     },
   };
 }

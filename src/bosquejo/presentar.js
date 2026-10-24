@@ -9,6 +9,7 @@ import { esc } from "../ui.js";
 
 const ESPERA_MS = 5000;   // sin respuesta de la PC después de esto, se dice "Sin respuesta"
 const REDIBUJO_MS = 5200; // un poco después, la vista se vuelve a dibujar sola para mostrarlo
+const CLAVE_PRES = "uc-pres"; // sessionStorage: dónde iba la presentación (solo id, lámina, versión y hora de inicio; nunca notas)
 const ERRORES = {
   mostrar: "La pantalla no pudo mostrar la lámina",
   reloj: "La hora de la tablet y la de la PC no coinciden",
@@ -17,7 +18,8 @@ const ERRORES = {
 
 // canal: el de la pantalla (o una función que lo da, porque conectar otra pantalla cambia de canal).
 // alCambiar(): algo cambió y la vista debe redibujarse. alFallar(e): no se pudo publicar (para avisar el motivo).
-export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (f, ms) => setTimeout(f, ms), alCambiar = () => {}, alFallar = () => {}, alEsperar = () => {} }) {
+export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (f, ms) => setTimeout(f, ms), alCambiar = () => {}, alFallar = () => {}, alEsperar = () => {},
+  sesion = (() => { try { return globalThis.sessionStorage ?? null; } catch { return null; } })() }) {
   const elCanal = () => (typeof canal === "function" ? canal() : canal);
   // b: el bosquejo completo (con notas); pub: lo que viaja; lams: sus láminas. Todo null cuando no hay presentación.
   let b = null, pub = null, lams = [], sigla = "", inicio = 0;
@@ -29,11 +31,22 @@ export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (
   const hora = () => (ultimaT = Math.max(ahora(), ultimaT + 1));
   const aviso = () => { try { alCambiar(); } catch { /* la vista ya no existe */ } };
 
+  // Dónde iba la presentación, para retomarla tras recargar la tablet o proyectar un pasaje en medio. Sin sessionStorage no se recuerda.
+  const recordar = () => { try { sesion?.setItem(CLAVE_PRES, JSON.stringify({ bosquejoId: b.id, i, sigla, inicio })); } catch { /* sin sessionStorage */ } };
+  const olvidar = () => { try { sesion?.removeItem(CLAVE_PRES); } catch { /* sin sessionStorage */ } };
+  const recordado = id => {
+    try {
+      const d = JSON.parse(sesion?.getItem(CLAVE_PRES) ?? "null");
+      return d && d.bosquejoId === id && Number.isInteger(d.i) && d.i >= 0 && d.i < lams.length && typeof d.sigla === "string" && d.sigla && Number.isFinite(d.inicio) ? d : null;
+    } catch { return null; }
+  };
+
   // Publica lo que dice (i, parte, sigla). El estado pasa a "enviando" al instante; si falla queda "sin" con el motivo.
   async function publicarLamina() {
     const mio = ++envioNo;
     // El estado se actualiza antes de esperar al canal: dos toques seguidos no se pisan.
     esperando = ahora(); confirmado = false; fallo = false; error = null; sinTexto = 0; enEspera = false;
+    recordar();
     aviso();
     try { await elCanal().publicar(msgLamina({ bosquejo: pub, i, sigla, parte }, hora())); }
     catch (e) {
@@ -51,10 +64,13 @@ export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (
     sigla: () => sigla,
     lamina: () => lams[i] ?? null,
 
-    // Lámina 0 en pantalla. `b` es el bosquejo completo; solo publicoDe(b) sale de la tablet.
+    // Lámina 0 en pantalla, o la que se recordó si es el mismo bosquejo (con su versión y su hora de inicio).
+    // `b` es el bosquejo completo; solo publicoDe(b) sale de la tablet.
     empezar(bosq, siglaInicial) {
       b = bosq; pub = publicoDe(bosq); lams = laminasDe(bosq); sigla = siglaInicial;
-      i = 0; parte = 0; partes = 1; inicio = ahora();
+      const antes = recordado(bosq.id);
+      i = antes ? antes.i : 0; parte = 0; partes = 1; inicio = antes ? antes.inicio : ahora();
+      if (antes) sigla = antes.sigla;
       return publicarLamina();
     },
 
@@ -96,6 +112,7 @@ export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (
       try { if (c) await c.publicar(msgEspera(hora())); } // sin pantalla conectada no hay nada que dejar en espera
       finally { quitando = false; }
       pres.soltar();
+      olvidar(); // Quitar termina el sermón: la próxima vez empieza en el título
     },
     // Termina la presentación sin publicar nada (la pantalla ya pasó a otra cosa, p. ej. a un pasaje).
     soltar() { b = pub = null; lams = []; esperando = null; confirmado = false; fallo = false; error = null; envioNo++; aviso(); },
@@ -111,9 +128,18 @@ export function crearPresentacion({ canal, ahora = () => Date.now(), esperar = (
         try { alEsperar(); } catch { /* sin aviso */ }
         aviso(); return true;
       }
+      // Error sin lámina (la hora de la PC y la de la tablet no coinciden): solo importa si se espera respuesta a un envío.
+      if (b && m?.de === "pantalla" && m.tipo === "estado" && m.codigo === undefined && m.bosquejo === undefined && m.error && esperando !== null) {
+        error = m.error; esperando = null; confirmado = true; sinTexto = 0;
+        aviso(); return true;
+      }
       if (!b || !m || m.de !== "pantalla" || m.tipo !== "estado" || m.bosquejo !== pub.id || m.lamina !== i) return false;
       if (m.error) { error = m.error; esperando = null; confirmado = true; sinTexto = m.sinTexto ?? 0; return aviso(); }
-      if (m.parte !== parte) return;
+      if (m.parte !== parte) {
+        // Con un envío pendiente, otra parte es una respuesta vieja. Sin envío pendiente, la PC cambió de parte por su cuenta (← →): se sigue a la PC.
+        if (esperando !== null || !Number.isInteger(m.parte) || !Number.isInteger(m.partes) || m.parte < 0 || m.parte >= m.partes) return;
+        parte = m.parte;
+      }
       partes = m.partes; esperando = null; confirmado = true; error = null; enEspera = false; sinTexto = m.sinTexto ?? 0;
       aviso();
     },
@@ -184,7 +210,7 @@ function htmlSigue(pres) {
   const l = s.lamina;
   const que = l.tipo === "titulo" ? "Título del sermón"
     : l.tipo === "recuerda" ? `¡Recuerda!: ${esc(pub.recuerda)}`
-    : `Punto ${l.p + 1}: ${esc(pub.puntos[l.p].frase)}${l.v === null ? "" : `<br>${l.v === 0 && pub.puntos[l.p].versos.length > 1 ? `(${nVersos(pub.puntos[l.p].versos.length)})` : `(versículo ${l.v + 1} de ${pub.puntos[l.p].versos.length})`}`}`;
+    : `Punto ${l.p + 1}: ${esc(pub.puntos[l.p].frase)}${l.v === null || pub.puntos[l.p].versos.length === 1 ? "" : `<br>${l.v === 0 ? `(${nVersos(pub.puntos[l.p].versos.length)})` : `(versículo ${l.v + 1} de ${pub.puntos[l.p].versos.length})`}`}`;
   return `<div class="p-sigue">${htmlMini(pub, l)}<p class="p-sigue-t"><b>Sigue</b><br>${que}</p></div>`;
 }
 

@@ -141,6 +141,8 @@ export function crearAlmacen(storage = almacenamientoPorDefecto(), reloj = () =>
       const s = sanearBosquejo({ ...b, id: b.id || nuevoId(), actualizado: reloj().toISOString() });
       if (!s) return null;
       const i = e.bosquejos.findIndex(x => x.id === s.id);
+      // Una edición hecha aquí no trae la hora del teléfono: se conserva la que ya tenía para no volver a aplicar ese envío.
+      if (i >= 0 && !s.recibidoActualizado && e.bosquejos[i].recibidoActualizado) s.recibidoActualizado = e.bosquejos[i].recibidoActualizado;
       if (i >= 0) e.bosquejos[i] = s; else e.bosquejos.push(s);
       guardar();
       return s.id;

@@ -45,16 +45,119 @@ function reloj() {
   };
 }
 
-function preparar({ falla = null } = {}) {
+function preparar({ falla = null, sesion } = {}) {
   const r = reloj(), publicados = [], cambios = [], fallos = [];
   const canal = { publicar: async m => { if (falla?.activo) throw falla.error; publicados.push(m); } };
-  const pres = crearPresentacion({ canal, ahora: r.ahora, esperar: r.esperar, alCambiar: () => cambios.push(1), alFallar: e => fallos.push(e) });
+  const pres = crearPresentacion({ canal, ahora: r.ahora, esperar: r.esperar, alCambiar: () => cambios.push(1), alFallar: e => fallos.push(e), ...(sesion ? { sesion } : {}) });
   // Lo que contesta la PC cuando muestra una lámina.
   const pantalla = (lamina, partes = 1, parte = 0, extra = {}) =>
     pres.recibirEstado(msgEstado({ bosquejo: "b1", lamina, partes, parte, sigla: "RVR1960", ...extra }, r.ahora()));
   return { r, pres, publicados, cambios, fallos, pantalla };
 }
 const ultima = p => p.publicados.at(-1);
+
+const sesionFalsa = () => { const m = new Map(); return { m, getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
+
+test("reanudar: el mismo bosquejo vuelve a la lámina y la versión recordadas", async () => {
+  const sesion = sesionFalsa();
+  const a = preparar({ sesion });
+  await a.pres.empezar(bosquejo(), "RVR1960");
+  await a.pres.irA(3);
+  await a.pres.cambiarVersion("TLA");
+  a.pres.soltar(); // p. ej. se proyectó un pasaje en medio, o la tablet se recargó
+  const b = preparar({ sesion });
+  await b.pres.empezar(bosquejo(), "RVR1960");
+  assert.equal(b.pres.estado().i, 3);
+  assert.equal(b.pres.sigla(), "TLA");
+  assert.equal(ultima(b).i, 3);
+  assert.equal(ultima(b).sigla, "TLA");
+});
+test("reanudar: el reloj de predicando sigue desde el inicio recordado", async () => {
+  const sesion = sesionFalsa();
+  const a = preparar({ sesion });
+  await a.pres.empezar(bosquejo(), "RVR1960");
+  await a.r.avanzar(7 * 60000);
+  await a.pres.irA(2);
+  a.pres.soltar();
+  assert.equal(JSON.parse(sesion.getItem("uc-pres")).inicio, 1_000_000);
+  const b = preparar({ sesion }); // reloj propio que arranca en el mismo instante
+  await b.r.avanzar(5 * 60000);
+  await b.pres.empezar(bosquejo(), "RVR1960");
+  assert.equal(b.pres.estado().i, 2);
+  assert.equal(b.pres.estado().minutos, 5, "cuenta desde el inicio recordado, no desde el reinicio");
+});
+test("reanudar: otro bosquejo empieza en la lámina 0", async () => {
+  const sesion = sesionFalsa();
+  const a = preparar({ sesion });
+  await a.pres.empezar(bosquejo(), "RVR1960");
+  await a.pres.irA(3);
+  a.pres.soltar();
+  const b = preparar({ sesion });
+  await b.pres.empezar({ ...bosquejo(), id: "b2" }, "RVR1960");
+  assert.equal(b.pres.estado().i, 0);
+  assert.equal(b.pres.sigla(), "RVR1960");
+});
+test("Quitar olvida lo recordado", async () => {
+  const sesion = sesionFalsa();
+  const a = preparar({ sesion });
+  await a.pres.empezar(bosquejo(), "RVR1960");
+  await a.pres.irA(3);
+  assert.ok(sesion.getItem("uc-pres"));
+  await a.pres.quitar();
+  assert.equal(sesion.getItem("uc-pres"), null);
+  const b = preparar({ sesion });
+  await b.pres.empezar(bosquejo(), "RVR1960");
+  assert.equal(b.pres.estado().i, 0);
+});
+test("reanudar: un dato recordado dañado o con una lámina que ya no existe se ignora", async () => {
+  const sesion = sesionFalsa();
+  sesion.setItem("uc-pres", "{no es json");
+  const a = preparar({ sesion });
+  await a.pres.empezar(bosquejo(), "RVR1960");
+  assert.equal(a.pres.estado().i, 0);
+  sesion.setItem("uc-pres", JSON.stringify({ bosquejoId: "b1", i: 99, sigla: "TLA", inicio: 5 }));
+  const b = preparar({ sesion });
+  await b.pres.empezar(bosquejo(), "RVR1960");
+  assert.equal(b.pres.estado().i, 0);
+});
+
+test("un error de reloj de la PC (sin lámina) con un envío pendiente llega a la presentación", async () => {
+  const { r, pres } = preparar();
+  assert.equal(pres.recibirEstado(msgEstado({ error: "reloj" }, r.ahora())), false, "sin presentación no se hace cargo");
+  await pres.empezar(bosquejo(), "RVR1960");
+  assert.equal(pres.recibirEstado(msgEstado({ error: "reloj" }, r.ahora())), true);
+  assert.equal(pres.estado().envio, "error");
+  assert.equal(textoEnvio(pres.estado()), "La hora de la tablet y la de la PC no coinciden");
+});
+test("un error de reloj sin envío pendiente no cambia la presentación", async () => {
+  const { r, pres, pantalla } = preparar();
+  await pres.empezar(bosquejo(), "RVR1960");
+  pantalla(0);
+  assert.equal(pres.estado().envio, "ok");
+  assert.equal(pres.recibirEstado(msgEstado({ error: "reloj" }, r.ahora())), false);
+  assert.equal(pres.estado().envio, "ok");
+});
+
+test("la PC cambia de parte por su cuenta (← →): la tablet la sigue; con un envío pendiente, no", async () => {
+  const { r, pres, pantalla } = preparar();
+  await pres.empezar(bosquejo(), "RVR1960");
+  await pres.irA(1); pantalla(1, 3, 0);
+  pantalla(1, 3, 2);
+  assert.equal(pres.estado().parte, 2);
+  assert.equal(pres.estado().partes, 3);
+  await pres.irA(2);
+  pres.recibirEstado(msgEstado({ bosquejo: "b1", lamina: 2, partes: 2, parte: 1, sigla: "RVR1960" }, r.ahora()));
+  assert.equal(pres.estado().parte, 0, "esperando respuesta a lo que se pidió: otra parte es una respuesta vieja");
+});
+
+test("Sigue no dice (versículo 1 de 1) cuando el punto tiene un solo versículo", async () => {
+  const { pres, pantalla } = preparar();
+  await pres.empezar(bosquejo(), "RVR1960");
+  await pres.irA(2); pantalla(2);
+  const html = htmlContenido(pres); // sigue: punto 2 con un solo versículo
+  assert.match(html, /Nada nos separa/);
+  assert.doesNotMatch(html, /versículo 1 de 1|1 versículo\)/);
+});
 
 test("empezar publica la lámina 0 con la parte pública", async () => {
   const { pres, publicados } = preparar();
@@ -575,4 +678,20 @@ test("lector: al proyectar un pasaje se llama alProyectarPasaje, y solo si se pu
   await L.proyectarActual();
   assert.equal(sueltas, 1, "si no se pudo publicar, la presentación sigue en pantalla");
   L.alProyectarPasaje(null);
+});
+
+test("lector: un error de reloj sin pasaje va a la presentación si se hace cargo; si no, sigue igual", async () => {
+  const { llega } = lectorConCanal();
+  await L.pintarLector(lectura());
+  await L.proyectarActual();
+  const recibidos = [];
+  L.alEstadoBosquejo(m => { recibidos.push(m); return true; });
+  llega(msgEstado({ error: "reloj" }, 20));
+  assert.equal(recibidos.length, 1);
+  assert.equal(L.estadoEnvio().tipo, "enviando", "el pasaje no se toca");
+  L.alEstadoBosquejo(() => false);
+  llega(msgEstado({ error: "reloj" }, 21));
+  assert.equal(L.proy.error, "reloj", "sin presentación, el lector hace lo de siempre");
+  L.alEstadoBosquejo(null);
+  L.soltarPantalla();
 });

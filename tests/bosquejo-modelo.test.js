@@ -122,3 +122,18 @@ test("sanearBosquejo: el título y la frase de cada punto son obligatorios (solo
   assert.equal(sanearBosquejo(ejemplo({ puntos: [{ frase: "A", versos: [] }, { frase: "", versos: [] }] })), null);
   assert.ok(sanearBosquejo(ejemplo({ puntos: [{ frase: "A", versos: [] }, { frase: "B", versos: [] }] })));
 });
+
+test("notasDe: sin ¡Recuerda! la Aplicación y la Conclusión van en las notas de la última lámina", () => {
+  const b = ejemplo({ recuerda: "", aplicacion: "Aplica", conclusion: "Cierra",
+    puntos: [{ frase: "A", versos: [], explicacion: "E1", ilustracion: "" }, { frase: "B", versos: [v("EPH.2.8"), v("ROM.3.24")], explicacion: "E2", ilustracion: "" }] });
+  const ls = laminasDe(b);
+  assert.deepEqual(notasDe(b, ls.at(-1)).partes.map(x => x.eti), ["Explicación", "Aplicación", "Conclusión / llamado"]);
+  assert.deepEqual(notasDe(b, ls.at(-2)).partes.map(x => x.eti), ["Explicación"], "solo la última");
+  assert.deepEqual(notasDe({ ...b, recuerda: "Ora" }, ls.at(-1)).partes.map(x => x.eti), ["Explicación"], "con ¡Recuerda! no cambia");
+});
+test("sanearBosquejo rechaza códigos que la PC no podría leer (cita principal y versículos)", () => {
+  assert.equal(sanearBosquejo(ejemplo({ cita: v("ZZZ.1.1") })), null);
+  assert.equal(sanearBosquejo(ejemplo({ cita: v("EPH.99.1") })), null);
+  assert.equal(sanearBosquejo(ejemplo({ puntos: [{ frase: "A", versos: [v("EPH.2.8"), v("XXX.1.1")] }] })), null);
+  assert.ok(sanearBosquejo(ejemplo({ cita: v("EPH.2.8-9"), puntos: [{ frase: "A", versos: [v("ROM.3.24")] }] })));
+});

@@ -423,7 +423,8 @@ async function guardarBosquejoForm(form, { cerrar = true } = {}) {
 // ---------- Teléfono: enviar (teléfono) y recibir (tablet) ----------
 // El bosquejo viaja cifrado con el código de la tablet (src/bosquejo/cifrado.js); por ntfy nunca pasa en claro.
 let enviandoBq = false;
-const htmlEnviar = () => `<button type="button" class="btn" id="b-enviar" ${enviandoBq ? "disabled" : ""}>${enviandoBq ? "Enviando…" : "Enviar a la tablet"}</button>`
+// Un aparato con código de tablet (config().telefono) es la tablet que recibe: ahí no se envía.
+const htmlEnviar = () => almacen.config().telefono ? "" : `<button type="button" class="btn" id="b-enviar" ${enviandoBq ? "disabled" : ""}>${enviandoBq ? "Enviando…" : "Enviar a la tablet"}</button>`
   + (almacen.config().destino ? `<button type="button" class="enlace" id="b-cambiar-tablet">Cambiar tablet</button>` : "");
 function pintarBotonEnviar() {
   const b = $("#b-enviar");
@@ -463,6 +464,11 @@ async function cambiarTablet() {
   avisoGuardado(almacen.guardarConfig({ destino: codigo }) && "Tablet cambiada");
 }
 
+// Los ids de los envíos ya procesados (los últimos 50) se guardan aparte: al reabrir la app, el historial de 12 h no los repite.
+const CLAVE_ENVIOS = "uc-envios-recibidos";
+const enviosHechos = () => { try { const l = JSON.parse(localStorage.getItem(CLAVE_ENVIOS)); return Array.isArray(l) ? l.filter(x => typeof x === "string") : []; } catch { return []; } };
+const guardarEnviosHechos = ids => { try { localStorage.setItem(CLAVE_ENVIOS, JSON.stringify(ids)); } catch { /* sin espacio: se repetiría como "repetido", sin dañar nada */ } };
+
 // Tablet: escucha el tema del código mientras la app esté abierta y, al abrir, revisa las últimas 12 h.
 let cerrarTelefono = null, generacionTel = 0, colaTel = Promise.resolve();
 async function conectarTelefono() {
@@ -474,7 +480,7 @@ async function conectarTelefono() {
     const [clave, tema] = await Promise.all([claveDe(codigo), temaTelefono(codigo)]);
     if (mia !== generacionTel) return;
     const canal = crearCanal(tema, { leer: leerEnvio });
-    const receptor = crearReceptor(clave, (b, envio) => alLlegarBosquejo(canal, b, envio));
+    const receptor = crearReceptor(clave, (b, envio) => alLlegarBosquejo(canal, b, envio), { yaHechos: enviosHechos(), alHechos: guardarEnviosHechos });
     // De uno en uno: dos envíos no se pisan al guardar. Si uno falla, ya se avisó; el siguiente sigue.
     const procesar = m => { colaTel = colaTel.then(() => (mia === generacionTel ? receptor.recibir(m) : null)).catch(e => console.error("Bosquejo recibido:", e)); };
     const recientes = async () => { for (const m of await recientesHastaLograr(canal, "telefono", { vigente: () => mia === generacionTel }) ?? []) procesar(m); };

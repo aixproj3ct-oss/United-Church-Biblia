@@ -2,6 +2,7 @@
 // Aquí se sanea lo que escribe el pastor, se arman las láminas y se separa lo que viaja a la PC de las notas privadas.
 import { validoCita } from "../citas.js";
 import { fechaReal } from "../fechas.js";
+import { refDeCodigo } from "../pasaje.js";
 
 export const MAX_PUNTOS = 6;
 export const MAX_VERSOS = 6;
@@ -12,8 +13,9 @@ const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
 
 const texto = (t, max) => (typeof t === "string" ? t.trim().slice(0, max) : "");
 
-// Una cita {codigo, etiqueta}: null si no hay, undefined si está mal formada. La etiqueta viene de parseCita y no se recalcula.
-const citaDe = c => (c === null || c === undefined ? null : validoCita(c) ? { codigo: c.codigo, etiqueta: c.etiqueta } : undefined);
+// Una cita {codigo, etiqueta}: null si no hay, undefined si está mal formada o si la PC no podría leer su código
+// (refDeCodigo). La etiqueta viene de parseCita y no se recalcula.
+const citaDe = c => (c === null || c === undefined ? null : validoCita(c) && refDeCodigo(c.codigo) ? { codigo: c.codigo, etiqueta: c.etiqueta } : undefined);
 
 // Devuelve el bosquejo recortado y limpio, o null si no es válido (sin id, fecha que no existe, título vacío,
 // 0 o más de 6 puntos, un punto sin frase, o una cita mal formada). El título y la frase de cada punto son obligatorios
@@ -84,12 +86,14 @@ export function fechaLamina(f) {
 export function notasDe(b, lamina) {
   const parte = (eti, t) => (t ? [{ eti, texto: t }] : []);
   if (lamina?.tipo === "titulo") return { titulo: "Introducción", partes: parte("Introducción", b.intro) };
-  if (lamina?.tipo === "recuerda") {
-    return { titulo: "¡Recuerda!", partes: [...parte("Aplicación", b.aplicacion), ...parte("Conclusión / llamado", b.conclusion)] };
-  }
+  const cierre = [...parte("Aplicación", b.aplicacion), ...parte("Conclusión / llamado", b.conclusion)];
+  if (lamina?.tipo === "recuerda") return { titulo: "¡Recuerda!", partes: cierre };
   const p = lamina?.tipo === "punto" ? b.puntos[lamina.p] : null;
   if (!p) return { titulo: "", partes: [] };
-  return { titulo: `Punto ${lamina.p + 1}`, partes: [...parte("Explicación", p.explicacion), ...parte("Ilustración", p.ilustracion)] };
+  // Sin ¡Recuerda! no hay lámina final: la Aplicación y la Conclusión se ven en las notas de la última lámina.
+  const u = laminasDe(b).at(-1);
+  const ultima = !b.recuerda && u.tipo === "punto" && u.p === lamina.p && u.v === lamina.v;
+  return { titulo: `Punto ${lamina.p + 1}`, partes: [...parte("Explicación", p.explicacion), ...parte("Ilustración", p.ilustracion), ...(ultima ? cierre : [])] };
 }
 
 // El domingo del plan al que corresponde el bosquejo. Se usa el de `domingoId` solo si sigue con la misma fecha;
@@ -116,14 +120,16 @@ export async function unirDomingo(almacen, b, { preguntar }) {
 }
 
 // Guarda en la tablet un bosquejo que llegó del teléfono, sin preguntar nada. Estados:
-//  "repetido": ya estaba (mismo id con igual o más reciente `actualizado`): no se toca ni se anuncia;
+//  "repetido": ya estaba y quedó escrito (mismo id con igual o más reciente `actualizado`): no se toca ni se anuncia;
 //  "guardado": quedó guardado y unido al domingo (`conflicto`: las citas del domingo eran otras y se dejaron);
 //  "sin_espacio": no quedó escrito en la tablet; "invalido": no se pudo guardar.
 export async function recibirBosquejo(almacen, b) {
   const ya = almacen.bosquejos().find(x => x.id === b.id);
-  // Se compara la hora del teléfono con la hora del teléfono (la tablet tiene otro reloj). Si la copia de la tablet no
-  // trae `recibidoActualizado`, se creó o se editó aquí: lo que llega siempre la reemplaza.
-  if (ya?.recibidoActualizado && b.actualizado <= ya.recibidoActualizado) return { estado: "repetido" };
+  // Se compara la hora del teléfono con la hora del teléfono (la tablet tiene otro reloj). `recibidoActualizado` se
+  // conserva al editar en la tablet (datos.js), así una edición local no deja volver a aplicar un envío viejo; solo un
+  // envío más nuevo del teléfono reemplaza. Si la copia de la tablet no lo trae, se creó aquí y lo que llega la reemplaza.
+  // Un "repetido" solo cuenta si el último guardado quedó escrito; si no, se reintenta el guardado.
+  if (ya?.recibidoActualizado && b.actualizado <= ya.recibidoActualizado && almacen.persistido()) return { estado: "repetido" };
   // El domingoId del teléfono no vale aquí: se conserva el de esta tablet, si lo había.
   const id = almacen.guardarBosquejo({ ...b, domingoId: ya?.domingoId ?? null, recibidoActualizado: b.actualizado });
   if (!id) return { estado: "invalido" };

@@ -79,6 +79,7 @@ function recibirEstado(m) {
     aviso(EN_ESPERA, 6000);
     return pintarBarra();
   }
+  if (m.codigo === undefined && m.error && enEstadoBosquejo?.(m) === true) return; // error de reloj con una presentación esperando respuesta
   if (m.codigo === undefined) { // error sin pasaje (la hora no coincide): solo importa si se está esperando respuesta
     if (proy.esperando === null) return;
     Object.assign(proy, { error: m.error, esperando: null });
