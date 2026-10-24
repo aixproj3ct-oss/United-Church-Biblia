@@ -42,6 +42,8 @@ export function sanearBosquejo(b) {
     titulo, cita, intro: texto(b.intro, MAX.nota), puntos,
     aplicacion: texto(b.aplicacion, MAX.nota), recuerda: texto(b.recuerda, MAX.recuerda),
     conclusion: texto(b.conclusion, MAX.nota), actualizado: typeof b.actualizado === "string" ? b.actualizado : "",
+    // Solo si vino del teléfono: la hora (del teléfono) de la versión recibida. Se usa para no repetir envíos; nunca sale a la pantalla.
+    ...(typeof b.recibidoActualizado === "string" && b.recibidoActualizado ? { recibidoActualizado: b.recibidoActualizado } : {}),
   };
 }
 
@@ -119,9 +121,11 @@ export async function unirDomingo(almacen, b, { preguntar }) {
 //  "sin_espacio": no quedó escrito en la tablet; "invalido": no se pudo guardar.
 export async function recibirBosquejo(almacen, b) {
   const ya = almacen.bosquejos().find(x => x.id === b.id);
-  if (ya && ya.actualizado >= b.actualizado) return { estado: "repetido" };
+  // Se compara la hora del teléfono con la hora del teléfono (la tablet tiene otro reloj). Si la copia de la tablet no
+  // trae `recibidoActualizado`, se creó o se editó aquí: lo que llega siempre la reemplaza.
+  if (ya?.recibidoActualizado && b.actualizado <= ya.recibidoActualizado) return { estado: "repetido" };
   // El domingoId del teléfono no vale aquí: se conserva el de esta tablet, si lo había.
-  const id = almacen.guardarBosquejo({ ...b, domingoId: ya?.domingoId ?? null });
+  const id = almacen.guardarBosquejo({ ...b, domingoId: ya?.domingoId ?? null, recibidoActualizado: b.actualizado });
   if (!id) return { estado: "invalido" };
   if (!almacen.persistido()) return { estado: "sin_espacio" };
   const r = await unirDomingo(almacen, almacen.bosquejos().find(x => x.id === id), { preguntar: async () => false });

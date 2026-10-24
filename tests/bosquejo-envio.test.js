@@ -276,3 +276,32 @@ test("la confirmación de la tablet es la que valida leerEnvio", () => {
   assert.deepEqual(m, { v: 1, de: "tablet", tipo: "recibido", envio: "e9", t: 123 });
   assert.deepEqual(leerEnvio(JSON.stringify(m)), m);
 });
+
+test("v1 y v2 llegan con el reloj de la tablet más tarde que ambos: queda v2", async () => {
+  const a = almacenEn("2026-10-23T14:00:00Z");
+  assert.equal((await recibirBosquejo(a, llegado({ titulo: "v1", actualizado: "2026-10-23T10:00:00.000Z" }))).estado, "guardado");
+  assert.equal((await recibirBosquejo(a, llegado({ titulo: "v2", actualizado: "2026-10-23T11:00:00.000Z" }))).estado, "guardado");
+  assert.equal(a.bosquejos().length, 1);
+  assert.equal(a.bosquejos()[0].titulo, "v2");
+  // y el envío viejo, otra vez, no lo pisa
+  assert.equal((await recibirBosquejo(a, llegado({ titulo: "v1", actualizado: "2026-10-23T10:00:00.000Z" }))).estado, "repetido");
+  assert.equal(a.bosquejos()[0].titulo, "v2");
+});
+
+test("la misma versión entregada dos veces: la segunda es repetida", async () => {
+  const a = almacenEn("2026-10-23T14:00:00Z");
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "guardado");
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "repetido");
+  assert.equal(a.bosquejos().length, 1);
+});
+
+test("tras editar en la tablet, lo que envía el teléfono lo reemplaza", async () => {
+  const a = almacenEn("2026-10-23T14:00:00Z");
+  await recibirBosquejo(a, llegado());
+  assert.ok(a.bosquejos()[0].recibidoActualizado);
+  const { recibidoActualizado, ...editado } = a.bosquejos()[0]; // el formulario no lo lleva
+  a.guardarBosquejo({ ...editado, titulo: "Editado en la tablet" });
+  assert.equal(a.bosquejos()[0].recibidoActualizado, undefined);
+  assert.equal((await recibirBosquejo(a, llegado())).estado, "guardado"); // aun igual de viejo, gana el último envío
+  assert.equal(a.bosquejos()[0].titulo, "Salvos por gracia");
+});

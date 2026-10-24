@@ -304,7 +304,7 @@ function revisarFormBq() {
 // Vuelve a dibujar el formulario con lo escrito (al agregar o quitar un punto, o al recuperar un borrador), sin tocar la base de cambios.
 function repintarFormBq(crudo) {
   const y = $("#vista").scrollTop;
-  $("#vista").innerHTML = vistaFormBosquejo(bosquejoActual(), { maxPuntos: MAX_PUNTOS, crudo, presentar: bosquejoActual() ? botonPresentar(bosquejoActual()) : "", enviar: htmlEnviar() });
+  $("#vista").innerHTML = vistaFormBosquejo(bosquejoActual(), { maxPuntos: MAX_PUNTOS, crudo, presentar: bosquejoActual() ? botonPresentar(bosquejoActual()) : "", enviar: bosquejoActual() ? htmlEnviar() : "" });
   $("#vista").scrollTop = y; revisarFormBq();
 }
 const mismoCrudo = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -338,7 +338,7 @@ function vistaBosquejo() {
   if (!editandoB) return `${saludo()}${vistaListaBosquejos(almacen.bosquejos())}`;
   const b = bosquejoActual();
   if (!b) bosquejoSel = null; // el bosquejo ya no existe (p. ej. se restauró una copia): se trata como uno nuevo
-  return vistaFormBosquejo(b, { maxPuntos: MAX_PUNTOS, presentar: b ? botonPresentar(b) : "", enviar: htmlEnviar() });
+  return vistaFormBosquejo(b, { maxPuntos: MAX_PUNTOS, presentar: b ? botonPresentar(b) : "", enviar: b ? htmlEnviar() : "" });
 }
 
 // ---------- Presentar el bosquejo ----------
