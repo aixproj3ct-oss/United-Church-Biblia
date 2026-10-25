@@ -322,3 +322,6 @@ dialog h3{margin:0 0 4px}dialog .sub{margin:0 0 6px;color:var(--sub)}
   .p-barra .p-grande{flex:1}
   .p-barra .der{order:3;flex-basis:100%;justify-content:space-between}
 }
+
+/* «Seguir leyendo»: el libro en letra recta, que se lee mejor que la cursiva (pedido del usuario 2026-10-25) */
+.seguir-cap{font-weight:700;font-size:17px;color:var(--oro-t)}

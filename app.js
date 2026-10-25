@@ -513,7 +513,7 @@ function vistaBiblia() {
       <button type="submit" class="btn pri" id="b-abrir" disabled>Abrir</button></form>
     <div id="pista" class="pista"></div>
     <div id="resultados">${busqueda ? htmlResultados() : ""}</div>
-    ${busqueda ? "" : `${ultimo ? `<div class="acciones"><button class="btn peq" data-capitulo="${enc({ codigo: ultimo.codigo, cap: ultimo.cap })}">${ic("bib")}Seguir leyendo: <span class="ref" style="font-size:18px">${esc(etiquetaRef({ ...ultimo, v1: null, v2: null }))}</span></button></div>` : ""}
+    ${busqueda ? "" : `${ultimo ? `<div class="acciones"><button class="btn peq" data-capitulo="${enc({ codigo: ultimo.codigo, cap: ultimo.cap })}">${ic("bib")}Seguir leyendo: <b class="seguir-cap">${esc(etiquetaRef({ ...ultimo, v1: null, v2: null }))}</b></button></div>` : ""}
     <div class="pestanas" style="margin-top:16px"><button class="${testamento === "at" ? "on" : ""}" data-testamento="at">Antiguo Testamento</button><button class="${testamento === "nt" ? "on" : ""}" data-testamento="nt">Nuevo Testamento</button></div>
     ${libro ? `<div class="cab-dom" style="margin-bottom:10px"><h2 style="margin:0">${esc(libro[1])}</h2><button class="enlace" data-libro="">Todos los libros</button></div>
         <div class="caps">${Array.from({ length: libro[2] }, (_, i) => `<button data-capitulo="${enc({ codigo: libro[0], cap: i + 1 })}">${i + 1}</button>`).join("")}</div>`
